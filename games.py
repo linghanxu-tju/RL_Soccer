@@ -8,7 +8,7 @@ import matplotlib.pyplot  as plt
 import time
 
 CELL, BLOCK, AGENT_GOAL, OPPONENT_GOAL, AGENT, OPPONENT = range(6)
-WIN, LOSE = 5, -5
+WIN, LOSE, TIE = 5, -5, 0
 UP, RIGHT, DOWN, LEFT, HOLD = range(5)
 
 UNIT = 40
@@ -39,15 +39,20 @@ class Soccer(tk.Tk, object):
         self.action_space = [UP, RIGHT, DOWN, LEFT, HOLD]  
         self.n_actions = len(self.action_space)
         self.n_features = 5
+        self.counter = 0
         self.visualize()
         # low high to observe
         #self.observation_space = spaces.Discrete(7 * 7 * 2)
 
     def step(self, act_a, act_o):
+        self.counter += 1
         new_pos_a = self.agent + self.action_map[act_a]
         new_pos_o = self.opponent + self.action_map[act_o]
 
         reward, done, s_ = 0, False, []
+        if self.counter >= 500:
+            reward = TIE
+            done = True
         # opponent win
         if self.grids[tuple(new_pos_o)] == 3 and not self.agent_keep_ball:
             reward = LOSE
@@ -89,10 +94,11 @@ class Soccer(tk.Tk, object):
             s_.append(0)
         else: s_.append(1)
         s_ = np.array(s_[:5])/ 10
-        return s_, reward, done
+        return s_, reward, done, {}
 
     # reset position and ball
     def reset(self):
+        self.counter = 0
         self.agent = np.array([3, 1])
         self.opponent = np.array([3, 5])
         self.agent_keep_ball = False
@@ -151,18 +157,23 @@ class Soccer(tk.Tk, object):
         # pack all
         self.canvas.pack()
 
+    def close(self):
+        self.canvas.destroy()
+
 
 if __name__ == '__main__':
     env = Soccer()
     env.reset()
     # agent strategy
-    agent_actions = [RIGHT, RIGHT, UP, RIGHT, RIGHT, RIGHT]
+    agent_actions = [RIGHT, RIGHT, UP, RIGHT, RIGHT, RIGHT, RIGHT, RIGHT, DOWN, DOWN, RIGHT, RIGHT, RIGHT, RIGHT, RIGHT,]
     # opponent strategy, you can initialize it randomly
-    opponent_actions = [UP, LEFT, LEFT, LEFT, LEFT, LEFT, LEFT]
+    opponent_actions = [UP, LEFT, LEFT, LEFT, LEFT, LEFT, LEFT,  RIGHT, RIGHT, RIGHT, RIGHT, RIGHT,]
 
     for a_a, a_o in zip(agent_actions, opponent_actions):
         env.render() 
-        env.step(a_a, a_o)
+        s_, reward, done, _ = env.step(a_a, a_o)
+        if done:
+            break
         time.sleep(0.3)
         #env.after(100, run_maze)
         #env.mainloop()
