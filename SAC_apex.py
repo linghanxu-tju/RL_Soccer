@@ -28,7 +28,7 @@ if __name__ == '__main__':
     # running setting
     parser.add_argument('--cuda', default=False, action='store_true')
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--n_process', type=int, default=1)
+    parser.add_argument('--n_process', type=int, default=4)
     # basic env setting
     parser.add_argument('--env', type=str, default="FightingiceDataFrameskip-v0")
     parser.add_argument('--p2', type=str, default="Toothless")
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     shared_ac = deepcopy(global_ac).cpu()
     global_ac_targ = deepcopy(global_ac)
 
-    target_entropy = -torch.prod(torch.Tensor(env.n_actions).to(device)).item()  # heuristic value from the paper
+    target_entropy = -np.log((1.0 / act_dim)) * 0.5
     alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if not args.fix_alpha else args.min_alpha
     pi_optimizer = Adam(global_ac.pi.parameters(), lr=args.lr, eps=1e-4)
     q1_optimizer = Adam(global_ac.q1.parameters(), lr=args.lr, eps=1e-4)
@@ -253,7 +253,7 @@ if __name__ == '__main__':
             alpha_loss.backward(retain_graph=False)
             alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if not args.fix_alpha else args.min_alpha
 
-            nn.utils.clip_grad_norm_(global_ac.parameters(), 20)
+            nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=20, norm_type=2)
             pi_optimizer.step()
             q1_optimizer.step()
             q2_optimizer.step()
