@@ -50,7 +50,7 @@ class Soccer(tk.Tk, object):
         new_pos_o = self.opponent + self.action_map[act_o]
 
         reward, done, s_ = 0, False, []
-        if self.counter >= 500:
+        if self.counter >= 50:
             reward = TIE
             done = True
         # opponent win
@@ -93,7 +93,7 @@ class Soccer(tk.Tk, object):
         if self.agent_keep_ball:
             s_.append(0)
         else: s_.append(1)
-        s_ = np.array(s_[:5])/ 10
+        s_ = np.array(s_[:5]) / 10
         return s_, reward, done, {}
 
     # reset position and ball
@@ -107,7 +107,7 @@ class Soccer(tk.Tk, object):
         if self.agent_keep_ball:
             s_.append(0)
         else: s_.append(1)
-        s_ = np.array(s_[:5])/ 10
+        s_ = np.array(s_[:5]) / 10
         return s_
 
     # render array

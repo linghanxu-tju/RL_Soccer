@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # running setting
     parser.add_argument('--cuda', default=False, action='store_true')
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--n_process', type=int, default=10)
+    parser.add_argument('--n_process', type=int, default=4)
     # basic env setting
     parser.add_argument('--env', type=str, default="FightingiceDataFrameskip-v0")
     parser.add_argument('--p2', type=str, default="Toothless")
@@ -30,15 +30,15 @@ if __name__ == '__main__':
     parser.add_argument('--list', nargs='+')
     # training setting
     parser.add_argument('--replay_size', type=int, default=100000)
-    parser.add_argument('--batch_size', type=int, default=256)
+    parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--hid', type=int, default=256)
-    parser.add_argument('--l', type=int, default=2, help="layers")
+    parser.add_argument('--l', type=int, default=4, help="layers")
     parser.add_argument('--episode', type=int, default=100000)
     parser.add_argument('--start_steps', type=int, default=1000)
     parser.add_argument('--update_after', type=int, default=100)
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
-    parser.add_argument('--min_alpha', type=float, default=0.3)
+    parser.add_argument('--min_alpha', type=float, default=0.05)
     parser.add_argument('--fix_alpha', default=False, action="store_true")
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -92,6 +92,7 @@ if __name__ == '__main__':
     # obs_dim = env.observation_space.shape[0]
     # act_dim = env.action_space.n
     env = Soccer()
+    # env = gym.make("CartPole-v0")
     obs_dim = env.n_features
     act_dim = env.n_actions
     if args.cpc:

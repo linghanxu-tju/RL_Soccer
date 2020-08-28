@@ -31,6 +31,7 @@ def sac(global_ac, global_ac_targ, rank, T, E, args, scores, wins, buffer_q, dev
     # obs_dim = env.observation_space.shape[0]
     # act_dim = env.action_space.n
     env = Soccer()
+    # env = gym.make("CartPole-v0")
     obs_dim = env.n_features
     act_dim = env.n_actions
     print("set up child process env")
@@ -49,7 +50,7 @@ def sac(global_ac, global_ac_targ, rank, T, E, args, scores, wins, buffer_q, dev
     training_buffer = ReplayBuffer(obs_dim=obs_dim, size=args.replay_size)
 
     # Entropy Tuning
-    target_entropy = -torch.prod(torch.Tensor(env.n_actions).to(device)).item()  # heuristic value from the paper
+    target_entropy = -np.log((1.0 / act_dim)) * 0.5
     alpha = max(local_ac.log_alpha.exp().item(), args.min_alpha) if not args.fix_alpha else args.min_alpha
 
     # Set up optimizers for policy and q-function
@@ -85,14 +86,7 @@ def sac(global_ac, global_ac_targ, rank, T, E, args, scores, wins, buffer_q, dev
         # Step the env
         o2, r, d, info = env.step(a,np.random.randint(act_dim))
         env.render()
-        if glod_model is None or not args.ood:
-            replay_buffer.store(o, a, r, o2, d, str(p2))
-            training_buffer.store(o, a, r, o2, d, str(p2))
-        else:
-            obs_glod_score = retrieve_scores(glod_model, np.expand_dims(o, axis=0), device=torch.device("cpu"), k=args.ood_K)
-            if glod_lower <= obs_glod_score <= glod_upper:
-                training_buffer.store(o, a, r, o2, d, str(p2))
-            replay_buffer.store(o, a, r, o2, d, str(p2))
+
 
         if info.get('no_data_receive', False):
             discard = True
@@ -102,10 +96,17 @@ def sac(global_ac, global_ac_targ, rank, T, E, args, scores, wins, buffer_q, dev
         # Ignore the "done" signal if it comes from hitting the time
         # horizon (that is, when it's an artificial terminal signal
         # that isn't based on the agent's state)
-        d = False if (ep_len == args.max_ep_len) or discard else d
-        # Store experience to replay buffer
-        replay_buffer.store(o, a, r, o2, d)
+        # d = False if (ep_len == args.max_ep_len) or discard else d
 
+        # Store experience to replay buffer
+        if glod_model is None or not args.ood:
+            replay_buffer.store(o, a, r, o2, d, str(p2))
+            training_buffer.store(o, a, r, o2, d, str(p2))
+        else:
+            obs_glod_score = retrieve_scores(glod_model, np.expand_dims(o, axis=0), device=torch.device("cpu"), k=args.ood_K)
+            if glod_lower <= obs_glod_score <= glod_upper:
+                training_buffer.store(o, a, r, o2, d, str(p2))
+            replay_buffer.store(o, a, r, o2, d, str(p2))
         # Super critical, easy to overlook step: make sure to update
         # most recent observation!
         o = o2
@@ -168,7 +169,6 @@ def sac(global_ac, global_ac_targ, rank, T, E, args, scores, wins, buffer_q, dev
         # SAC Update handling
         if local_e >= args.update_after and local_t % args.update_every == 0:
             for j in range(args.update_every):
-
                 batch = training_buffer.sample_trans(args.batch_size,device=device)
                 # First run one gradient descent step for Q1 and Q2
                 q1_optimizer.zero_grad()

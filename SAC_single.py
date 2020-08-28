@@ -1,15 +1,15 @@
+import gym
 import os
 import time
+import itertools
 import numpy as np
 import torch
+from games import Soccer
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 from torch.distributions import Categorical
 from copy import deepcopy
-from spinup.utils.logx import EpochLogger
-from OppModeling.atari_wrappers import make_ftg_ram
-from OppModeling.model_parameter_trans import state_dict_trans
 
 
 def combined_shape(length, shape=None):
@@ -56,8 +56,8 @@ class MLPActorCritic(nn.Module):
                  activation=nn.ReLU):
         super().__init__()
 
-        obs_dim = observation_space.shape[0]
-        act_dim = action_space.n
+        obs_dim = observation_space
+        act_dim = action_space
         # act_limit = action_space.high[0]
 
         # build policy and value functions
@@ -205,21 +205,19 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     """
 
-    logger = EpochLogger(**logger_kwargs)
-    logger.save_config(locals())
 
     torch.manual_seed(seed)
     np.random.seed(seed)
 
     env, test_env = env_fn(), env_fn()
-    obs_dim = env.observation_space.shape[0]
-    act_dim = env.action_space.n
+    obs_dim = env.n_features
+    act_dim = env.n_actions
 
     # Action limit for clamping: critically, assumes all dimensions share the same bound!
     # act_limit = env.action_space.high[0]
 
     # Create actor-critic module and target networks
-    ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
+    ac = actor_critic(obs_dim, act_dim, **ac_kwargs)
     ac_targ = deepcopy(ac)
 
     # Freeze target networks with respect to optimizers (only update via polyak averaging)
@@ -233,7 +231,6 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     # Count variables (protip: try to get a feel for how different size networks behave!)
     var_counts = tuple(count_vars(module) for module in [ac.pi, ac.q1, ac.q2])
-    logger.log('\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
 
     # Set up optimizers for policy and q-function
     pi_optimizer = Adam(ac.pi.parameters(), lr=lr)
@@ -241,7 +238,6 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     q2_optimizer = Adam(ac.q2.parameters(), lr=lr)
 
     # Set up model saving
-    logger.setup_pytorch_saver(ac)
 
     # product action
     def get_actions_info(a_prob):
@@ -307,7 +303,6 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         q2_optimizer.step()
 
         # Record things
-        logger.store(LossQ=loss_q.detach().item(), **q_info)
 
         # Freeze Q-networks so you don't waste computational effort
         # computing gradients for them during the policy learning step.
@@ -325,7 +320,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             # p.requires_grad = True
 
         # Record things
-        logger.store(LossPi=loss_pi.item(), **pi_info)
+
 
         # Finally, update target networks by polyak averaging.
         with torch.no_grad():
@@ -353,7 +348,6 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
                 # test_env.render()
                 ep_ret += r
                 ep_len += 1
-            logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
             print(ep_ret)
 
     # Prepare for interaction with environment
@@ -368,13 +362,12 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         # Until start_steps have elapsed, randomly sample actions
         # from a uniform distribution for better exploration. Afterwards,
         # use the learned policy.
-        if t > start_steps:
-            a = get_action(o)
-        else:
-            a = env.action_space.sample()
+        a = get_action(o)
+        env.render()
+
 
         # Step the env
-        o2, r, d, info = env.step(a)
+        o2, r, d, info = env.step(a,np.random.randint(act_dim))
         if info.get('no_data_receive', False):
             discard = True
         env.render()
@@ -395,7 +388,6 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
         # End of trajectory handling
         if d or (ep_len == max_ep_len) or discard:
-            logger.store(EpRet=ep_ret, EpLen=ep_len)
             scores.append(ep_ret)
             print("round len:{}, round score: {}, mean score: {}".format(ep_len, ep_ret, np.mean(scores[-100:])))
             o, ep_ret, ep_len = env.reset(), 0, 0
@@ -415,10 +407,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             # Save model
             if t % save_freq == 0 and t > 0:
                 torch.save(ac.state_dict(), os.path.join(save_dir, "model"))
-                state_dict_trans(ac.state_dict(), os.path.join(save_dir, "SAC_Toothless.numpy"))
                 print("Saving model at episode:{}".format(t))
-            if (epoch % save_freq == 0) or (epoch == epochs):
-                logger.save_state({'env': env}, None)
 
             # # Test the performance of the deterministic version of the agent.
             # test_agent()
@@ -455,15 +444,13 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
-    from spinup.utils.run_utils import setup_logger_kwargs
 
-    logger_kwargs = setup_logger_kwargs(args.exp_name, args.seed)
 
     torch.set_num_threads(torch.get_num_threads())
 
-    sac(lambda: make_ftg_ram(args.env, p2=args.p2), actor_critic=MLPActorCritic,
+    sac(lambda: Soccer(), actor_critic=MLPActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
         gamma=args.gamma, seed=args.seed, epochs=args.epochs, steps_per_epoch=1000, replay_size=int(1e6),
-        polyak=0.995, lr=args.lr, alpha=0.2, batch_size=128, start_steps=10000,
+        polyak=0.995, lr=args.lr, alpha=0.2, batch_size=1024, start_steps=10000,
         update_after=1000, update_every=100, num_test_episodes=5, max_ep_len=1000,save_freq=100,
-        logger_kwargs=logger_kwargs, save_dir=args.save_dir)
+        logger_kwargs=dict(), save_dir=args.save_dir)
