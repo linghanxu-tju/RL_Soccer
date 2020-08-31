@@ -6,7 +6,7 @@ import time
 import torch
 import torch.multiprocessing as mp
 from copy import deepcopy
-from games import Soccer
+from games import Soccer,SoccerPLUS
 # from tensorboardX import GlobalSummaryWriter
 from OppModeling.atari_wrappers import make_ftg_ram, make_ftg_ram_nonstation
 from OppModeling.utils import Counter, count_vars
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     # running setting
     parser.add_argument('--cuda', default=False, action='store_true')
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--n_process', type=int, default=4)
+    parser.add_argument('--n_process', type=int, default=5)
     # basic env setting
     parser.add_argument('--env', type=str, default="FightingiceDataFrameskip-v0")
     parser.add_argument('--p2', type=str, default="Toothless")

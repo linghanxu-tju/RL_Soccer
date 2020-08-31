@@ -58,7 +58,7 @@ class Player:
         self.energy = max(min(self.max_energy, self.energy), 0)
 
     def energy_enough(self, action):
-        return False if self.energy - self.energy_cost[action] < 0 else True
+        return False if self.energy + self.energy_cost[action] < 0 else True
 
     def has_ball(self):
         return self.keeping_ball
@@ -95,7 +95,7 @@ class Soccer(tk.Tk, object):
         LEFT: np.array([0, -1]),
         HOLD: np.array([0, 0])}
 
-    def __init__(self, visual=False):
+    def __init__(self):
         super(Soccer, self).__init__()
         self.size = int(np.sqrt(len(self.playground)))
         self.max_steps = len(self.playground) * 2
@@ -232,6 +232,53 @@ class Soccer(tk.Tk, object):
     def close(self):
         self.canvas.destroy()
 
+    def is_valid_moving(self,location, action):
+        if self.grids[tuple(location + action)] != 1:
+            return True
+        else:
+            return False
+
+    # The following method is mainly used to construct manual policy
+    @staticmethod
+    def getDistance(location1, location2):
+        return abs(location1[0] - location2[0]) + abs(location1[1] - location2[1])
+
+    def getPlayerDistance(self):
+        return abs(self.agent[0]-self.opponent[0]) + abs(self.agent[1]-self.opponent[1])
+
+    def getGoalLocation(self, player_num):
+        goal_value = 2 if player_num else 3
+        locations = np.argwhere(self.grids == goal_value)
+        return locations
+
+    def getGoalDistance(self, goal_locations, target_location):
+        return np.sum(abs(goal_locations - target_location), axis=1)
+
+    def getNextLocation(self, now_location, action):
+        return now_location + action
+
+    def getNextLocationAll(self, now_location):
+        action_offset = np.array([self.action_map[i] for i in range(self.n_actions)])
+        return action_offset + now_location
+
+    def validLocation(self, new_location):
+        return not self.grids[tuple(new_location)] == 1
+
+    def validLocationAll(self, new_locations):
+        valid = []
+        for location in new_locations:
+            valid.append(not self.grids[tuple(location)] == 1)
+        return np.array(valid)
+
+
+    def reachGoal(self, new_location,player_num):
+        goal_value = 2 if player_num else 3
+        return False if self.grids[tuple(new_location)] == goal_value else True
+
+    def reachGoalAll(self, new_locations,player_num):
+        goal_value = 2 if player_num else 3
+        return self.grids[tuple(new_locations)] == goal_value
+
 
 class SoccerPLUS(Soccer):
     action_map = {
@@ -252,18 +299,21 @@ class SoccerPLUS(Soccer):
 
     def __init__(self):
         super().__init__()
-        self.player_agent = Player(player_num=True, max_energy=3)
-        self.player_opponent = Player(player_num=False, max_energy=3)
-        self.agent = self.player_agent.get_location()
-        self.opponent = self.player_opponent.get_location()
-        self.agent_keep_ball = self.player_agent.has_ball()
+        self.player_agent = Player(player_num=True, max_energy=2)
+        self.player_opponent = Player(player_num=False, max_energy=2)
+        self.player_agent.set_location(self.agent)
+        self.player_opponent.set_location(self.opponent)
+        self.player_agent.set_ball(False)
+        self.player_opponent.set_ball(True)
         self.action_space = [UP, RIGHT, DOWN, LEFT, HOLD, DASH_UP, DASH_RIGHT, DASH_DOWN, DASH_LEFT, DASH_UP_LEFT,
                              DASH_UP_RIGHT, DASH_DOWN_LEFT, DASH_DOWN_RIGHT]
 
         self.n_actions = len(self.action_space)
-        self.n_features = 8
+        self.n_features = 7
 
     def step(self, act_a, act_o):
+        assert np.array_equal(self.player_agent.get_location(),self.agent) and np.array_equal(self.player_opponent.get_location(),self.opponent)
+        assert self.agent_keep_ball == self.player_agent.has_ball()
         # print("=" * 20 + " DEBUG_INFO " + "=" * 20)
         # print("Agent Action:\t{},\tOpponent Action:\t{}".format(self.action_map[act_a], self.action_map[act_o]))
         self.counter += 1
@@ -271,6 +321,8 @@ class SoccerPLUS(Soccer):
         # get intended new position
         new_pos_a = self.agent + self.action_map[act_a]
         new_pos_o = self.opponent + self.action_map[act_o]
+        if (max(new_pos_a) >= self.size or max(new_pos_o)>=self.size or min(new_pos_a) < 0 or min(new_pos_o)) and self.done < 0:
+            print("HERE")
         # round end check
         reward, done = self.round_end_check(new_pos_a, new_pos_o)
         new_pos_a, new_pos_o, act_a, act_o = self.moving_validation(new_pos_a, new_pos_o, act_a, act_o)
@@ -290,10 +342,10 @@ class SoccerPLUS(Soccer):
         self.canvas.delete(self.opp_rect)
         self.canvas.delete(self.ball_rect)
         self.update_canvas()
-        s_ = [self.agent[0], self.agent[1], self.player_agent.get_energy(), int(self.player_agent.has_ball()),
-              self.opponent[0], self.opponent[1], self.player_opponent.get_energy(), int(self.player_opponent.has_ball())]
-        s_ = np.array(s_)
-
+        s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.player_agent.get_energy()/self.player_agent.max_energy, self.opponent[0]/self.size, self.opponent[1]/self.size, self.player_opponent.get_energy()/self.player_opponent.max_energy, int(self.agent_keep_ball)]
+        s_ = np.array(s_,dtype=np.float)
+        if done:
+            self.done = done
         # DEBUG INFO
         # print("Agent location:\t{},\tOppo location:\t{}".format(self.player_agent.get_location(), self.player_opponent.get_location()))
         # print("Agent energy:\t{},\tOppo energy:\t{}".format(self.player_agent.get_energy(), self.player_opponent.get_energy()))
@@ -303,22 +355,22 @@ class SoccerPLUS(Soccer):
 
     def reset(self):
         super().reset()
+        self.done = False
         self.player_agent.set_location(self.agent)
         self.player_opponent.set_location(self.opponent)
-        self.player_agent.set_energy(3)
-        self.player_opponent.set_energy(3)
+        self.player_agent.set_energy(2)
+        self.player_opponent.set_energy(2)
         self.player_agent.set_ball(False)
         self.player_opponent.set_ball(True)
-        s_ = [self.agent[0], self.agent[1], self.player_agent.get_energy(), int(self.player_agent.has_ball()),
-              self.opponent[0], self.opponent[1], self.player_opponent.get_energy(), int(self.player_opponent.has_ball())]
-        s_ = np.array(s_)
+        s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.player_agent.get_energy()/self.player_agent.max_energy, self.opponent[0]/self.size, self.opponent[1]/self.size, self.player_opponent.get_energy()/self.player_opponent.max_energy, int(self.agent_keep_ball)]
+        s_ = np.array(s_,dtype=np.float)
         return s_
 
     def collision_check(self, new_pos_a, new_pos_o):
         if np.array_equal(new_pos_a, new_pos_o) and self.grids[tuple(new_pos_a)] != 1:
             self.player_agent.change_ball()
             self.player_opponent.change_ball()
-            self.agent_keep_ball = self.player_agent.has_ball()
+            self.agent_keep_ball = not self.agent_keep_ball
 
     def round_end_check(self,new_pos_a, new_pos_o):
         reward, done = 0, False
@@ -351,29 +403,31 @@ class SoccerPLUS(Soccer):
     def action_energy_check(self, act_a, act_o):
         if not self.player_agent.energy_enough(act_a):
             act_a = HOLD
-        if not self.player_opponent.energy_enough(act_a):
-            act_a = HOLD
+        if not self.player_opponent.energy_enough(act_o):
+            act_o = HOLD
         return act_a, act_o
 
-    def energy_update(self,act_a,act_o):
+    def energy_update(self, act_a, act_o):
         self.player_agent.update_energy(act_a)
         self.player_opponent.update_energy(act_o)
 
 
+
 if __name__ == '__main__':
-    env = Soccer()
+    env = SoccerPLUS()
     env.reset()
     # agent strategy
-    agent_actions = [RIGHT, RIGHT, RIGHT, RIGHT, RIGHT, RIGHT, UP, UP, UP, UP, UP, UP]
+    agent_actions = [RIGHT] * 6 + [RIGHT] * 7
     # opponent strategy, you can initialize it randomly
-    opponent_actions = [LEFT, LEFT, LEFT, LEFT, LEFT, LEFT, UP, UP, UP, UP, UP, UP, ]
+    opponent_actions = [LEFT] * 6 + [RIGHT] * 7
 
-    for a_a, a_o in zip(agent_actions, opponent_actions):
+    for step, (a_a, a_o) in enumerate(zip(agent_actions, opponent_actions)):
         env.render()
         s_, reward, done, _ = env.step(a_a, a_o)
+        print(step, s_)
         if done:
             break
-        time.sleep(0.3)
+        time.sleep(1)
         # env.after(100, run_maze)
         # env.mainloop()
         # env.render()

@@ -2,7 +2,7 @@ import os
 import gym
 import numpy as np
 import torch
-from games import Soccer
+from games import Soccer,SoccerPLUS
 import torch.nn as nn
 from copy import deepcopy
 from torch.optim import Adam
@@ -77,8 +77,8 @@ def sac(global_ac, global_ac_targ, rank, T, E, args, scores, wins, buffer_q, dev
         # Until start_steps have elapsed, randomly sample actions
         # from a uniform distribution for better exploration. Afterwards,
         # use the learned policy.
-
-        a = local_ac.get_action(o, device=device)
+        with torch.no_grad():
+            a = local_ac.get_action(o, device=device)
         if hasattr(env, 'p2'):
             p2 = env.p2
         else:
@@ -175,25 +175,30 @@ def sac(global_ac, global_ac_targ, rank, T, E, args, scores, wins, buffer_q, dev
                 q2_optimizer.zero_grad()
                 loss_q = local_ac.compute_loss_q(batch, global_ac_targ, args.gamma, alpha)
                 loss_q.backward()
+                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=20, norm_type=2)
+                q1_optimizer.step()
+                q2_optimizer.step()
 
                 # Next run one gradient descent step for pi.
                 pi_optimizer.zero_grad()
                 loss_pi, entropy = local_ac.compute_loss_pi(batch, alpha)
                 loss_pi.backward()
+                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=20, norm_type=2)
+                pi_optimizer.step()
 
                 alpha_optim.zero_grad()
                 alpha_loss = -(local_ac.log_alpha * (entropy + target_entropy).detach()).mean()
                 alpha_loss.backward(retain_graph=False)
                 alpha = max(local_ac.log_alpha.exp().item(), args.min_alpha) if not args.fix_alpha else args.min_alpha
+                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=20, norm_type=2)
+                alpha_optim.step()
 
-                nn.utils.clip_grad_norm_(local_ac.parameters(), 20)
                 for global_param, local_param in zip(global_ac.parameters(), local_ac.parameters()):
                     global_param._grad = local_param.grad
 
-                pi_optimizer.step()
-                q1_optimizer.step()
-                q2_optimizer.step()
-                alpha_optim.step()
+
+
+
 
                 state_dict = global_ac.state_dict()
                 local_ac.load_state_dict(state_dict)
