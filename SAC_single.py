@@ -8,6 +8,7 @@ from games import Soccer,SoccerPLUS
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
+from Policy_New import Policy
 from torch.utils.tensorboard import SummaryWriter
 from torch.distributions import Categorical
 from copy import deepcopy
@@ -117,8 +118,9 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     np.random.seed(seed)
 
     env = env_fn()
+    opp_policy = Policy(game=env, player_num=False)
     obs_dim = env.n_features
-    act_dim = 9 #env.n_actions
+    act_dim = env.n_actions #env.n_actions
 
     # Action limit for clamping: critically, assumes all dimensions share the same bound!
     # act_limit = env.action_space.high[0]
@@ -239,9 +241,6 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             _adjust_learning_rate(q2_optimizer, max(lr, 1e-10))
             _adjust_learning_rate(pi_optimizer, max(lr, 1e-10))
 
-
-
-
         # Finally, update target networks by polyak averaging.
         with torch.no_grad():
             for p, p_targ in zip(ac.parameters(), ac_targ.parameters()):
@@ -291,7 +290,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
 
         # Step the env
-        o2, r, d, info = env.step(a,np.random.randint(9))
+        o2, r, d, info = env.step(a,opp_policy.get_actions(1))
         if info.get('no_data_receive', False):
             discard = True
         env.render()
@@ -383,6 +382,6 @@ if __name__ == '__main__':
     sac(lambda: SoccerPLUS(), actor_critic=MLPActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
         gamma=args.gamma, seed=args.seed, epochs=args.epochs, steps_per_epoch=1000, replay_size=int(1e6),
-        polyak=0.995, lr=args.lr, alpha=0.05, batch_size=4096, start_steps=10000,
+        polyak=0.995, lr=args.lr, alpha=0.1, batch_size=4096, start_steps=10000,
         update_after=10000, update_every=1, num_test_episodes=5, max_ep_len=1000,save_freq=100,
         logger_kwargs=dict(), save_dir=args.save_dir)
