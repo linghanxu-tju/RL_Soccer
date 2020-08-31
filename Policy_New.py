@@ -16,9 +16,9 @@ class Policy:
         self.update_status()
         self.policy_type = [self.policy0, self.policy1, self.policy2, self.policy3]
 
-    def moving(self, closer: bool, player_number: bool, locations: np.ndarray, actions: np.ndarray, weight=(1, 1, 1)):
+    def moving(self, closer: bool, player_number: bool, locations: np.ndarray, actions: np.ndarray, weight=(1, 0, 0)):
         assert locations.ndim == 2 and actions.ndim == 2
-        current_location = self.me if player_number else self.opp
+        current_location = self.me
         current_dis = np.sum(abs(locations - current_location), axis=1)
         next_locations = current_location + actions
         min_dis, max_dis, mean_dis = [], [], []
@@ -37,7 +37,7 @@ class Policy:
 
     def validActionAll(self, player_number):
         all_actions = []
-        current_location = self.me if player_number else self.opp
+        current_location = self.me
         for i in range(len(self.action_map)):
             all_actions.append(self.action_map[i])
         all_actions = np.array(all_actions)
@@ -61,7 +61,6 @@ class Policy:
             return self.offset_action[tuple(offset)]
         else:
             return None
-
 
     def keep_ball(self):
         assert self.has_ball
@@ -87,7 +86,7 @@ class Policy:
         action = np.random.choice(action_index, p=actions_prob)
         return action
 
-    # policy 1: if not has ball, get ball. if has ball get to goal
+    # policy 0: if not has ball, get ball. if has ball get to goal
     def policy0(self, valid_actions):
         if self.has_ball:
             offset = self.win_the_game(valid_actions)
@@ -103,14 +102,15 @@ class Policy:
         action = self.score_to_index(valid_actions, actions_score)
         return action
 
-    # policy 3: if not has ball, get ball. if has ball get to goal and keep away from opponent
+    # policy 1: if not has ball, get ball. if has ball get to goal and keep away from opponent
     def policy1(self, valid_actions):
         if self.has_ball:
             offset = self.win_the_game(valid_actions)
             if offset is not None:
                 return self.offset_action[tuple(offset)]
-            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal, actions=valid_actions, weight=(2, 2, 2))
-            actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions, weight=(1, 1, 1))
+            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal, actions=valid_actions,)
+            if self.game.getPlayerDistance() <=3:
+                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions,)
         else:
             actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
             if self.game.getPlayerDistance() <= 2:
@@ -122,14 +122,15 @@ class Policy:
 
     # policy 2:
     # if not has ball, defence the goal if distance larger than 2. if less than 2 get closer try to grab the ball.
-    # if has ball get to goal
+    # if has ball get to goal and keep away from opponent
     def policy2(self, valid_actions):
         if self.has_ball:
             offset = self.win_the_game(valid_actions)
             if offset is not None:
                 return self.offset_action[tuple(offset)]
             actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal, actions=valid_actions)
-            actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
+            if self.game.getPlayerDistance() <=3:
+                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
         else:
             actions_score = self.moving(closer=True, player_number=True, locations=self.opp_goal, actions=valid_actions)
             if self.game.getPlayerDistance() <= 2:
@@ -141,7 +142,7 @@ class Policy:
 
     # policy 3:
     # if not has ball, defence the goal if distance larger than 2. if less than 2 get closer try to grab the ball.
-    # if has ball get to goal and keep away from opponent
+    # if has ball get to goal
     def policy3(self, valid_actions):
         if self.has_ball:
             offset = self.win_the_game(valid_actions)
@@ -165,7 +166,7 @@ class Policy:
 
 if __name__ == "__main__":
     policy_types = list(range(5))
-    env = SoccerPLUS()
+    env = Soccer()
     env.reset()
     my_policy = Policy(game=env, player_num=True)
     opp_policy = Policy(game=env, player_num=False)
