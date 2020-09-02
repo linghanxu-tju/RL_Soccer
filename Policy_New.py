@@ -1,5 +1,6 @@
 import numpy as np
 import time
+import pickle
 from games import Soccer, SoccerPLUS
 
 
@@ -170,11 +171,31 @@ if __name__ == "__main__":
     env.reset()
     my_policy = Policy(game=env, player_num=True)
     opp_policy = Policy(game=env, player_num=False)
-    while True:
-        s_, reward, done, _ = env.step(my_policy.get_actions(1), opp_policy.get_actions(1))
-        env.render()
-        if done:
-            env.reset()
+    for rounds in range(1000):
+        env.reset()
+        while True:
+            s_, reward, done, _ = env.step(my_policy.get_actions(3), opp_policy.get_actions(3))
             env.render()
-        time.sleep(0.1)
-
+            if done:
+                break
+    # total_performance = dict()
+    # win_rate = dict()
+    # mean_scores = dict()
+    # for my in range(4):
+    #     for opp in range(4):
+    #         policy_performance = list()
+    #         for rounds in range(1000):
+    #             env.reset()
+    #             while True:
+    #                 s_, reward, done, _ = env.step(my_policy.get_actions(my), opp_policy.get_actions(opp))
+    #                 if done:
+    #                     policy_performance.append(reward)
+    #                     break
+    #         total_performance["()-{}".format(my, opp)] = policy_performance
+    #         wins = np.sum(np.array(policy_performance) > 0) / 1000
+    #         mean_score = np.mean(np.array(policy_performance))
+    #         win_rate["()-{}".format(my, opp)] = wins
+    #         mean_scores["()-{}".format(my, opp)] = mean_score
+    #         print("MY Policy:\t{},\tOpp Policy:\t{},\tMeans Scores:\t{},\twin_rate:{}".format(my, opp, mean_score, wins))
+    # with open("Policy_Performance", "wb") as f:
+    #     pickle.dump((total_performance, win_rate, mean_scores,), f)
