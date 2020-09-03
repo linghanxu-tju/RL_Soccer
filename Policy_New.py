@@ -110,7 +110,7 @@ class Policy:
             if offset is not None:
                 return self.offset_action[tuple(offset)]
             actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal, actions=valid_actions,)
-            if self.game.getPlayerDistance() <=3:
+            if self.game.getPlayerDistance() <= 5:
                 actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions,)
         else:
             actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
@@ -130,7 +130,7 @@ class Policy:
             if offset is not None:
                 return self.offset_action[tuple(offset)]
             actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal, actions=valid_actions)
-            if self.game.getPlayerDistance() <=3:
+            if self.game.getPlayerDistance() <= 5:
                 actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
         else:
             actions_score = self.moving(closer=True, player_number=True, locations=self.opp_goal, actions=valid_actions)
@@ -167,15 +167,16 @@ class Policy:
 
 if __name__ == "__main__":
     policy_types = list(range(5))
-    env = Soccer()
+    env = SoccerPLUS()
     env.reset()
     my_policy = Policy(game=env, player_num=True)
     opp_policy = Policy(game=env, player_num=False)
     for rounds in range(1000):
         env.reset()
         while True:
-            s_, reward, done, _ = env.step(my_policy.get_actions(3), opp_policy.get_actions(3))
+            s_, reward, done, _ = env.step(my_policy.get_actions(0), opp_policy.get_actions(1))
             env.render()
+            time.sleep(0.2)
             if done:
                 break
     # total_performance = dict()
@@ -184,18 +185,18 @@ if __name__ == "__main__":
     # for my in range(4):
     #     for opp in range(4):
     #         policy_performance = list()
-    #         for rounds in range(1000):
+    #         for rounds in range(100):
     #             env.reset()
     #             while True:
     #                 s_, reward, done, _ = env.step(my_policy.get_actions(my), opp_policy.get_actions(opp))
     #                 if done:
     #                     policy_performance.append(reward)
     #                     break
-    #         total_performance["()-{}".format(my, opp)] = policy_performance
-    #         wins = np.sum(np.array(policy_performance) > 0) / 1000
+    #         total_performance["{}-{}".format(my, opp)] = policy_performance
+    #         wins = np.sum(np.array(policy_performance) > 0) / 100
     #         mean_score = np.mean(np.array(policy_performance))
-    #         win_rate["()-{}".format(my, opp)] = wins
-    #         mean_scores["()-{}".format(my, opp)] = mean_score
+    #         win_rate["{}-{}".format(my, opp)] = wins
+    #         mean_scores["{}-{}".format(my, opp)] = mean_score
     #         print("MY Policy:\t{},\tOpp Policy:\t{},\tMeans Scores:\t{},\twin_rate:{}".format(my, opp, mean_score, wins))
     # with open("Policy_Performance", "wb") as f:
     #     pickle.dump((total_performance, win_rate, mean_scores,), f)
