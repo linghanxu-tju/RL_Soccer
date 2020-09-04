@@ -17,9 +17,9 @@ class Policy:
         self.update_status()
         self.policy_type = [self.policy0, self.policy1, self.policy2, self.policy3]
 
-    def moving(self, closer: bool, player_number: bool, locations: np.ndarray, actions: np.ndarray, weight=(1, 0, 0)):
+    def moving(self, closer: bool, player_number: bool, locations: np.ndarray, actions: np.ndarray, weight=(1, 1, 1)):
         assert locations.ndim == 2 and actions.ndim == 2
-        current_location = self.me
+        current_location = self.me if player_number else self.opp
         current_dis = np.sum(abs(locations - current_location), axis=1)
         next_locations = current_location + actions
         min_dis, max_dis, mean_dis = [], [], []
@@ -36,11 +36,18 @@ class Policy:
         scores[np.argwhere(scores < 0)] = 0
         return scores
 
-    def validActionAll(self, player_number):
+    def validActionAll(self):
         all_actions = []
         current_location = self.me
         for i in range(len(self.action_map)):
-            all_actions.append(self.action_map[i])
+            if hasattr(self.game, 'player_agent'):
+                if self.game.player_agent.energy_enough(i):
+                    if self.game.getPlayerDistance() <= 4:
+                        all_actions.append(self.action_map[i])
+                    elif self.game.player_agent.energy_cost[i] > 0:
+                        all_actions.append(self.action_map[i])
+            else:
+                all_actions.append(self.action_map[i])
         all_actions = np.array(all_actions)
         new_locations = current_location + all_actions
         valid_actions = self.game.validLocationAll(new_locations)
@@ -110,8 +117,8 @@ class Policy:
             if offset is not None:
                 return self.offset_action[tuple(offset)]
             actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal, actions=valid_actions,)
-            if self.game.getPlayerDistance() <= 5:
-                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions,)
+            if self.game.getPlayerDistance() <= 4:
+                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions, weight=(0.5, 0.5, 0.5))
         else:
             actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
             if self.game.getPlayerDistance() <= 2:
@@ -130,8 +137,8 @@ class Policy:
             if offset is not None:
                 return self.offset_action[tuple(offset)]
             actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal, actions=valid_actions)
-            if self.game.getPlayerDistance() <= 5:
-                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
+            if self.game.getPlayerDistance() <= 4:
+                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions, weight=(0.5, 0.5, 0.5))
         else:
             actions_score = self.moving(closer=True, player_number=True, locations=self.opp_goal, actions=valid_actions)
             if self.game.getPlayerDistance() <= 2:
@@ -161,7 +168,7 @@ class Policy:
 
     def get_actions(self, policy_num):
         self.update_status()
-        valid_new_locations, all_actions = self.validActionAll(player_number=self.player_num)
+        valid_new_locations, all_actions = self.validActionAll()
         return self.policy_type[policy_num](all_actions)
 
 
@@ -174,10 +181,11 @@ if __name__ == "__main__":
     for rounds in range(1000):
         env.reset()
         while True:
-            s_, reward, done, _ = env.step(my_policy.get_actions(0), opp_policy.get_actions(1))
+            s_, reward, done, _ = env.step(my_policy.get_actions(0), opp_policy.get_actions(0))
             env.render()
-            time.sleep(0.2)
+            time.sleep(0.5)
             if done:
+                print(reward)
                 break
     # total_performance = dict()
     # win_rate = dict()
@@ -185,7 +193,7 @@ if __name__ == "__main__":
     # for my in range(4):
     #     for opp in range(4):
     #         policy_performance = list()
-    #         for rounds in range(100):
+    #         for rounds in range(1000):
     #             env.reset()
     #             while True:
     #                 s_, reward, done, _ = env.step(my_policy.get_actions(my), opp_policy.get_actions(opp))
@@ -193,7 +201,7 @@ if __name__ == "__main__":
     #                     policy_performance.append(reward)
     #                     break
     #         total_performance["{}-{}".format(my, opp)] = policy_performance
-    #         wins = np.sum(np.array(policy_performance) > 0) / 100
+    #         wins = np.sum(np.array(policy_performance) > 0) / 1000
     #         mean_score = np.mean(np.array(policy_performance))
     #         win_rate["{}-{}".format(my, opp)] = wins
     #         mean_scores["{}-{}".format(my, opp)] = mean_score

@@ -379,7 +379,7 @@ if __name__ == '__main__':
 
     torch.set_num_threads(torch.get_num_threads())
 
-    sac(lambda: Soccer(), actor_critic=MLPActorCritic,
+    sac(lambda: SoccerPLUS(), actor_critic=MLPActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
         gamma=args.gamma, seed=args.seed, epochs=args.epochs, steps_per_epoch=1000, replay_size=int(1e6),
         polyak=0.995, lr=args.lr, alpha=0.1, batch_size=4096, start_steps=10000,

@@ -9,14 +9,11 @@ import time
 
 CELL, BLOCK, AGENT_GOAL, OPPONENT_GOAL, AGENT, OPPONENT = range(6)
 WIN, LOSE, TIE = 5, -5, 0
-UP, RIGHT, DOWN, LEFT, HOLD, DASH_UP, DASH_RIGHT, DASH_DOWN, DASH_LEFT, DASH_UP_LEFT, DASH_UP_RIGHT, DASH_DOWN_LEFT, DASH_DOWN_RIGHT = range(
-13)
-
+UP, RIGHT, DOWN, LEFT, HOLD, DASH_UP_LEFT, DASH_UP_RIGHT, DASH_DOWN_LEFT, DASH_DOWN_RIGHT, DASH_UP, DASH_RIGHT, DASH_DOWN, DASH_LEFT, = range(13)
 UNIT = 40
 
 
 class Player:
-
     energy_cost = {
         UP: 0.5,
         RIGHT: 0.5,
@@ -35,7 +32,6 @@ class Player:
 
     def __init__(self, player_num, max_energy):
         self.player_num = player_num
-        self.keeping_ball = False if player_num else True
         self.location = np.array([0, 0])
         self.max_energy = max_energy
         self.energy = self.max_energy
@@ -54,7 +50,10 @@ class Player:
         self.energy = energy_level
 
     def update_energy(self, action):
-        self.energy += self.energy_cost[action]
+        if self.has_ball() and action in [UP, RIGHT, DOWN, LEFT, HOLD]:
+            self.energy += self.energy_cost[action] - 0.5
+        else:
+            self.energy += self.energy_cost[action]
         self.energy = max(min(self.max_energy, self.energy), 0)
 
     def energy_enough(self, action):
@@ -102,7 +101,7 @@ class Soccer(tk.Tk, object):
         self.agent = np.array([self.size // 2, 2])
         self.opponent = np.array([self.size // 2, self.size - 3])
         self.grids = np.array(self.playground).reshape(self.size, self.size)
-        self.agent_keep_ball = False
+        self.agent_keep_ball = bool(np.random.randint(0, 2))
         self.action_space = [UP, RIGHT, DOWN, LEFT, HOLD]
         self.n_actions = len(self.action_space)
         self.n_features = 5
@@ -164,7 +163,7 @@ class Soccer(tk.Tk, object):
         self.counter = 0
         self.agent = np.array([self.size // 2, 2])
         self.opponent = np.array([self.size // 2, self.size - 3])
-        self.agent_keep_ball = False
+        self.agent_keep_ball = bool(np.random.randint(0, 2))
         self.update()
         s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.opponent[0]/self.size, self.opponent[1]/self.size]
         if self.agent_keep_ball:
@@ -287,14 +286,14 @@ class SoccerPLUS(Soccer):
         DOWN: np.array([1, 0]),
         LEFT: np.array([0, -1]),
         HOLD: np.array([0, 0]),
-        DASH_UP: np.array([-2, 0]),
-        DASH_RIGHT: np.array([0, 2]),
-        DASH_DOWN: np.array([2, 0]),
-        DASH_LEFT: np.array([0, -2]),
         DASH_UP_LEFT: np.array([-1, -1]),
         DASH_UP_RIGHT: np.array([-1, 1]),
         DASH_DOWN_LEFT: np.array([1, -1]),
         DASH_DOWN_RIGHT: np.array([1, 1]),
+        DASH_UP: np.array([-2, 0]),
+        DASH_RIGHT: np.array([0, 2]),
+        DASH_DOWN: np.array([2, 0]),
+        DASH_LEFT: np.array([0, -2]),
     }
 
     def __init__(self):
@@ -303,16 +302,13 @@ class SoccerPLUS(Soccer):
         self.player_opponent = Player(player_num=False, max_energy=2)
         self.player_agent.set_location(self.agent)
         self.player_opponent.set_location(self.opponent)
-        self.player_agent.set_ball(False)
-        self.player_opponent.set_ball(True)
-        self.action_space = [UP, RIGHT, DOWN, LEFT, HOLD, DASH_UP, DASH_RIGHT, DASH_DOWN, DASH_LEFT, DASH_UP_LEFT,
-                             DASH_UP_RIGHT, DASH_DOWN_LEFT, DASH_DOWN_RIGHT]
-
-        self.n_actions = len(self.action_space)
+        self.player_agent.set_ball(self.agent_keep_ball)
+        self.player_opponent.set_ball(not self.agent_keep_ball)
+        self.n_actions = len(self.action_map)
         self.n_features = 7
 
     def step(self, act_a, act_o):
-        assert np.array_equal(self.player_agent.get_location(),self.agent) and np.array_equal(self.player_opponent.get_location(),self.opponent)
+        assert np.array_equal(self.player_agent.get_location(), self.agent) and np.array_equal(self.player_opponent.get_location(), self.opponent)
         assert self.agent_keep_ball == self.player_agent.has_ball()
         # print("=" * 20 + " DEBUG_INFO " + "=" * 20)
         # print("Agent Action:\t{},\tOpponent Action:\t{}".format(self.action_map[act_a], self.action_map[act_o]))
@@ -327,7 +323,7 @@ class SoccerPLUS(Soccer):
         reward, done = self.round_end_check(new_pos_a, new_pos_o)
         new_pos_a, new_pos_o, act_a, act_o = self.moving_validation(new_pos_a, new_pos_o, act_a, act_o)
         # collision check
-        self.collision_check(new_pos_a, new_pos_o)
+        new_pos_a, new_pos_o = self.collision_check(new_pos_a, new_pos_o)
         # used for update the canvas
         self.agent = new_pos_a
         self.opponent = new_pos_o
@@ -360,17 +356,23 @@ class SoccerPLUS(Soccer):
         self.player_opponent.set_location(self.opponent)
         self.player_agent.set_energy(2)
         self.player_opponent.set_energy(2)
-        self.player_agent.set_ball(False)
-        self.player_opponent.set_ball(True)
+        self.player_agent.set_ball(self.agent_keep_ball)
+        self.player_opponent.set_ball(not self.agent_keep_ball)
         s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.player_agent.get_energy()/self.player_agent.max_energy, self.opponent[0]/self.size, self.opponent[1]/self.size, self.player_opponent.get_energy()/self.player_opponent.max_energy, int(self.agent_keep_ball)]
         s_ = np.array(s_,dtype=np.float)
         return s_
 
     def collision_check(self, new_pos_a, new_pos_o):
+        assert self.player_agent.has_ball() != self.player_opponent.has_ball()
         if np.array_equal(new_pos_a, new_pos_o) and self.grids[tuple(new_pos_a)] != 1:
+            if self.player_agent.has_ball() or all(np.equal(new_pos_a, self.opponent)):
+                new_pos_a = self.agent
+            if self.player_opponent.has_ball() or all(np.equal(new_pos_o, self.agent)):
+                new_pos_o = self.opponent
             self.player_agent.change_ball()
             self.player_opponent.change_ball()
             self.agent_keep_ball = not self.agent_keep_ball
+        return new_pos_a, new_pos_o
 
     def round_end_check(self,new_pos_a, new_pos_o):
         reward, done = 0, False
@@ -402,15 +404,22 @@ class SoccerPLUS(Soccer):
 
     def action_energy_check(self, act_a, act_o):
         if not self.player_agent.energy_enough(act_a):
-            act_a = HOLD
+            if act_a == DASH_UP: act_a = UP
+            elif act_a == DASH_LEFT: act_a = LEFT
+            elif act_a == DASH_DOWN: act_a = DOWN
+            elif act_a == DASH_RIGHT: act_a = RIGHT
+            else: act_a = HOLD
         if not self.player_opponent.energy_enough(act_o):
-            act_o = HOLD
+            if act_o == DASH_UP: act_o = UP
+            elif act_o == DASH_LEFT: act_o = LEFT
+            elif act_o == DASH_DOWN: act_o = DOWN
+            elif act_o == DASH_RIGHT: act_o = RIGHT
+            else: act_o = HOLD
         return act_a, act_o
 
     def energy_update(self, act_a, act_o):
         self.player_agent.update_energy(act_a)
         self.player_opponent.update_energy(act_o)
-
 
 
 if __name__ == '__main__':

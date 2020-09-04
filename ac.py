@@ -76,10 +76,10 @@ def main():
     # obs_dim = env.observation_space.shape[0]
     # act_dim = env.action_space.n
 
-    env = Soccer()
+    env = SoccerPLUS()
     obs_dim = env.n_features
     act_dim = env.n_actions
-    hidden = 64
+    hidden = 256
     opp_policy = Policy(game=env,player_num=False)
     model = ActorCritic(obs_dim,act_dim,hidden)
     print_interval = 20
