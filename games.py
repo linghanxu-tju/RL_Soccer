@@ -151,7 +151,7 @@ class Soccer(tk.Tk, object):
         self.canvas.delete(self.opp_rect)
         self.canvas.delete(self.ball_rect)
         self.update_canvas()
-        s_ = [self.agent[0], self.agent[1], self.opponent[0], self.opponent[1]]
+        s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.opponent[0]/self.size, self.opponent[1]/self.size]
         if self.agent_keep_ball:
             s_.append(0)
         else:
@@ -166,7 +166,7 @@ class Soccer(tk.Tk, object):
         self.opponent = np.array([self.size // 2, self.size - 3])
         self.agent_keep_ball = False
         self.update()
-        s_ = [self.agent[0], self.agent[1], self.opponent[0], self.opponent[1]]
+        s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.opponent[0]/self.size, self.opponent[1]/self.size]
         if self.agent_keep_ball:
             s_.append(0)
         else:
