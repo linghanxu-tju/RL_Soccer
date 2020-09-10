@@ -11,7 +11,7 @@ CELL, BLOCK, AGENT_GOAL, OPPONENT_GOAL, AGENT, OPPONENT = range(6)
 WIN, LOSE, TIE = 5, -5, 0
 UP, RIGHT, DOWN, LEFT, HOLD, DASH_UP_LEFT, DASH_UP_RIGHT, DASH_DOWN_LEFT, DASH_DOWN_RIGHT, DASH_UP, DASH_RIGHT, DASH_DOWN, DASH_LEFT, = range(13)
 UNIT = 40
-
+VISUAL = True
 
 class Player:
     energy_cost = {
@@ -69,7 +69,7 @@ class Player:
         self.keeping_ball = not self.keeping_ball
 
 
-class Soccer(tk.Tk, object):
+class Soccer(tk.Tk if VISUAL else object):
     playground = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
@@ -94,7 +94,7 @@ class Soccer(tk.Tk, object):
         LEFT: np.array([0, -1]),
         HOLD: np.array([0, 0])}
 
-    def __init__(self):
+    def __init__(self,visual=False):
         super(Soccer, self).__init__()
         self.size = int(np.sqrt(len(self.playground)))
         self.max_steps = len(self.playground) * 2
@@ -107,9 +107,11 @@ class Soccer(tk.Tk, object):
         self.n_features = 5
         self.counter = 0
         # creat canvas
-        self.visualize()
-        self.update_canvas()
-        self.canvas.pack()
+        self.visual =visual
+        if self.visual:
+            self.visualize()
+            self.update_canvas()
+            self.canvas.pack()
 
     def step(self, act_a, act_o):
         self.counter += 1
@@ -146,10 +148,11 @@ class Soccer(tk.Tk, object):
         self.opponent = new_pos_o
 
         # update canvas
-        self.canvas.delete(self.agent_rect)
-        self.canvas.delete(self.opp_rect)
-        self.canvas.delete(self.ball_rect)
-        self.update_canvas()
+        if self.visual:
+            self.canvas.delete(self.agent_rect)
+            self.canvas.delete(self.opp_rect)
+            self.canvas.delete(self.ball_rect)
+            self.update_canvas()
         s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.opponent[0]/self.size, self.opponent[1]/self.size]
         if self.agent_keep_ball:
             s_.append(0)
@@ -164,7 +167,8 @@ class Soccer(tk.Tk, object):
         self.agent = np.array([self.size // 2, 2])
         self.opponent = np.array([self.size // 2, self.size - 3])
         self.agent_keep_ball = bool(np.random.randint(0, 2))
-        self.update()
+        if self.visual:
+            self.update()
         s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.opponent[0]/self.size, self.opponent[1]/self.size]
         if self.agent_keep_ball:
             s_.append(0)
@@ -199,7 +203,8 @@ class Soccer(tk.Tk, object):
         else:
             m[tuple(self.opponent)] += 2
         # print(m, end='\n\n')
-        self.update()
+        if self.visual:
+            self.update()
         return m.reshape(len(self.playground))
 
     # render img
@@ -229,7 +234,8 @@ class Soccer(tk.Tk, object):
                     self.canvas.create_rectangle(i * UNIT, j * UNIT, (i + 1) * UNIT, (j + 1) * UNIT, fill='green')
 
     def close(self):
-        self.canvas.destroy()
+        if self.visual:
+            self.canvas.destroy()
 
     def is_valid_moving(self,location, action):
         if self.grids[tuple(location + action)] != 1:
@@ -296,8 +302,8 @@ class SoccerPLUS(Soccer):
         DASH_LEFT: np.array([0, -2]),
     }
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self,visual=False):
+        super().__init__(visual=visual)
         self.player_agent = Player(player_num=True, max_energy=2)
         self.player_opponent = Player(player_num=False, max_energy=2)
         self.player_agent.set_location(self.agent)
@@ -334,10 +340,11 @@ class SoccerPLUS(Soccer):
         self.player_agent.update_energy(act_a)
         self.player_opponent.update_energy(act_o)
         # update canvas
-        self.canvas.delete(self.agent_rect)
-        self.canvas.delete(self.opp_rect)
-        self.canvas.delete(self.ball_rect)
-        self.update_canvas()
+        if self.visual:
+            self.canvas.delete(self.agent_rect)
+            self.canvas.delete(self.opp_rect)
+            self.canvas.delete(self.ball_rect)
+            self.update_canvas()
         s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.player_agent.get_energy()/self.player_agent.max_energy, self.opponent[0]/self.size, self.opponent[1]/self.size, self.player_opponent.get_energy()/self.player_opponent.max_energy, int(self.agent_keep_ball)]
         s_ = np.array(s_,dtype=np.float)
         if done:
@@ -423,7 +430,7 @@ class SoccerPLUS(Soccer):
 
 
 if __name__ == '__main__':
-    env = SoccerPLUS()
+    env = SoccerPLUS(VISUAL)
     env.reset()
     # agent strategy
     agent_actions = [RIGHT] * 6 + [RIGHT] * 7
