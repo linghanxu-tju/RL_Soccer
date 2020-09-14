@@ -111,7 +111,7 @@ class ReplayBuffer:
 def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         steps_per_epoch=4000, epochs=100, replay_size=int(1e6), gamma=0.99,
         polyak=0.995, lr=1e-3, alpha=0.2, batch_size=100, start_steps=10000,
-        update_after=1000, update_every=50, num_test_episodes=10, max_ep_len=1000,
+        update_after=1000, update_every=50, num_test_episodes=10, max_ep_len=1000, policy_type = 1,
         logger_kwargs=dict(), save_freq=1000, save_dir=None):
 
     torch.manual_seed(seed)
@@ -290,7 +290,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
 
         # Step the env
-        o2, r, d, info = env.step(a,opp_policy.get_actions(1))
+        o2, r, d, info = env.step(a,opp_policy.get_actions(policy_type))
         if info.get('no_data_receive', False):
             discard = True
         env.render()
@@ -367,6 +367,10 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--epochs', type=int, default=1000)
+    parser.add_argument('--policy_type', type=int, default=1)
+    parser.add_argument('--replay_size', type=int, default=1000000)
+    parser.add_argument('--batch_size', type=int, default=4096)
+    parser.add_argument('--alpha', type=float, default=0.05)
     parser.add_argument('--exp_name', type=str, default='sac')
     parser.add_argument('--save_dir', type=str, default='OpenAI/SAC/')
     args = parser.parse_args()
@@ -379,9 +383,9 @@ if __name__ == '__main__':
 
     torch.set_num_threads(torch.get_num_threads())
 
-    sac(lambda: SoccerPLUS(), actor_critic=MLPActorCritic,
+    sac(lambda: SoccerPLUS(visual=False), actor_critic=MLPActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid] * args.l),
-        gamma=args.gamma, seed=args.seed, epochs=args.epochs, steps_per_epoch=1000, replay_size=int(1e6),
-        polyak=0.995, lr=args.lr, alpha=0.1, batch_size=4096, start_steps=10000,
-        update_after=10000, update_every=1, num_test_episodes=5, max_ep_len=1000,save_freq=100,
+        gamma=args.gamma, seed=args.seed, epochs=args.epochs, policy_type=args.policy_type,  replay_size=args.replay_size,
+        lr=args.lr, alpha=args.alpha, batch_size=args.batch_size, start_steps=10000, steps_per_epoch=1000, polyak=0.995,
+        update_after=10000, update_every=1, num_test_episodes=5, max_ep_len=1000, save_freq=100,
         logger_kwargs=dict(), save_dir=args.save_dir)

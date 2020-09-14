@@ -168,6 +168,8 @@ class Policy:
 
     def get_actions(self, policy_num):
         self.update_status()
+        if policy_num == -1:
+            return np.random.randint(len(self.action_map))
         valid_new_locations, all_actions = self.validActionAll()
         return self.policy_type[policy_num](all_actions)
 

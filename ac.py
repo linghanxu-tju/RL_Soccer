@@ -9,16 +9,13 @@ from Policy_New import Policy
 from torch.distributions import Categorical
 
 # Hyperparameters
-learning_rate = 0.0001
-gamma = 0.98
-n_rollout = 10
 
 
 class ActorCritic(nn.Module):
-    def __init__(self,obs_dim,act_dim,hidden):
+    def __init__(self, obs_dim, act_dim, hidden, learning_rate, gamma=0.98):
         super(ActorCritic, self).__init__()
         self.data = []
-
+        self.gamma = gamma
         self.fc1 = nn.Linear(obs_dim, hidden)
         self.fc_pi = nn.Linear(hidden, act_dim)
         self.fc_v = nn.Linear(hidden, 1)
@@ -59,7 +56,7 @@ class ActorCritic(nn.Module):
 
     def train_net(self):
         s, a, r, s_prime, done = self.make_batch()
-        td_target = r + gamma * self.v(s_prime) * done
+        td_target = r + self.gamma * self.v(s_prime) * done
         delta = td_target - self.v(s)
 
         pi = self.pi(s, softmax_dim=1)
@@ -76,13 +73,19 @@ def main():
     # obs_dim = env.observation_space.shape[0]
     # act_dim = env.action_space.n
 
-    env = SoccerPLUS()
+    env = SoccerPLUS(visual=False)
     obs_dim = env.n_features
     act_dim = env.n_actions
+    learning_rate = 0.0001
+    gamma = 0.98
     hidden = 256
-    opp_policy = Policy(game=env,player_num=False)
-    model = ActorCritic(obs_dim,act_dim,hidden)
-    print_interval = 20
+    n_rollout = 10
+    policy_type = 1
+    opp_policy = Policy(game=env, player_num=False)
+    model = ActorCritic(obs_dim, act_dim, hidden,learning_rate,gamma)
+
+    # Training Loop
+    print_interval = 100
     score = 0.0
     n_epi = 0
     while True:
@@ -95,7 +98,7 @@ def main():
                 m = Categorical(prob)
                 a = m.sample().item()
                 # s_prime, r, done, info = env.step(a)
-                s_prime, r, done, info = env.step(a,opp_policy.get_actions(1))
+                s_prime, r, done, info = env.step(a,opp_policy.get_actions(policy_type))
                 env.render()
                 model.put_data((s, a, r, s_prime, done))
 
