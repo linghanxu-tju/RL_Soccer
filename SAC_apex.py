@@ -22,7 +22,7 @@ from OppModeling.model_parameter_trans import state_dict_trans
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # running setting
-    parser.add_argument('--cuda', default=False, action='store_true')
+    parser.add_argument('--cuda', default=True, action='store_true')
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--n_process', type=int, default=4)
     # basic env setting
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
     parser.add_argument('--min_alpha', type=float, default=0.05)
-    parser.add_argument('--fix_alpha', default=False, action="store_true")
+    parser.add_argument('--fix_alpha', default=True, action="store_true")
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--polyak', type=float, default=0.995)
