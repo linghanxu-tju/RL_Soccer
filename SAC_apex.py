@@ -51,10 +51,11 @@ if __name__ == '__main__':
     parser.add_argument('--cpc', default=False, action="store_true")
     parser.add_argument('--cpc_batch', type=int, default=32)
     parser.add_argument('--z_dim', type=int, default=64)
-    parser.add_argument('--c_dim', type=int, default=8)
+    parser.add_argument('--c_dim', type=int, default=3)
     parser.add_argument('--timestep', type=int, default=10)
     parser.add_argument('--cpc_update_freq', type=int, default=100,)
-    parser.add_argument('--drop_freq', type=int, default=100,)
+    parser.add_argument('--forget_freq', type=int, default=100,)
+    parser.add_argument('--forget_percent', type=float, default=0.2, )
     parser.add_argument('--load_factor', type=float, default=0.95)
     # evaluation settings
     parser.add_argument('--test_episode', type=int, default=10)
@@ -238,7 +239,7 @@ if __name__ == '__main__':
                 c_hidden = global_cpc.init_hidden(len(data), args.c_dim, use_gpu=args.cuda)
                 acc, loss, latents = global_cpc(data, c_hidden)
 
-                replay_buffer.update_latent(indexes, min_len, latents.detach())
+                # replay_buffer.update_latent(indexes, min_len, latents.detach())
                 loss.backward()
                 # add gradient clipping
                 nn.utils.clip_grad_norm_(global_cpc.parameters(), max_norm=20, norm_type=2)
@@ -248,12 +249,22 @@ if __name__ == '__main__':
                 c_hidden = global_cpc.init_hidden(1, args.c_dim, use_gpu=args.cuda)
 
         # CPC forgetting
-        if args.cpc and e > 0 and (e % args.drop_freq == 0 or replay_buffer.load_factor() > args.forget_level):
-            # TODO refresh cpc embedding, add the embedding and meta data into tensorboard and then remove data
+        if args.cpc and e > 0 and (e % args.forget_freq == 0 or replay_buffer.load_factor() > args.forget_level):
+            all_embeddings = list()
+            for trajectory in replay_buffer.trajectories:
+                obs = [tran[0] for tran in trajectory]
+                c_hidden = global_cpc.init_hidden(len(obs), args.c_dim, use_gpu=args.cuda)
+                traj_c, c_hidden = global_cpc.predict(obs, c_hidden)
+                all_embeddings.append(traj_c)
             all_embeddings = np.array(all_embeddings)
-            writer.add_embedding(mat=all_embeddings, metadata=meta,
+            replay_buffer.latents = all_embeddings
+            flat_meta = list()
+            for meta_traj in replay_buffer.meta:
+                for meta in meta_traj:
+                    flat_meta.append(meta)
+            writer.add_embedding(mat=all_embeddings.flatten(), metadata=flat_meta,
                              metadata_header=["opponent", "rank", "round", "step", "reward", "action",])
-
+            replay_buffer.forget()
 
         # deliver the model and save
         if e % args.save_freq == 0 and e > 0 and e != last_saved:

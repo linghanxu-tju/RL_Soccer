@@ -2,6 +2,7 @@ import torch
 import random
 import numpy as np
 from OppModeling.utils import combined_shape
+from OppModeling.DTW import accelerated_dtw
 
 
 class ReplayBuffer:
@@ -102,7 +103,7 @@ class ReplayBufferShare:
 
 
 class ReplayBufferOppo:
-    def __init__(self, max_size, obs_dim, cpc=False):
+    def __init__(self, max_size, obs_dim, cpc=False, forget_percent=0.2):
         self.trajectories = list()
         self.latents = list()
         self.traj_len = list()
@@ -110,6 +111,7 @@ class ReplayBufferOppo:
         self.obs_dim = obs_dim
         self.size = 0
         self.cpc = cpc
+        self.forget_percent = forget_percent
         self.max_size = max_size
 
     def store(self, trajectory, latents=None, meta=None):
@@ -127,12 +129,30 @@ class ReplayBufferOppo:
             self.trajectories.pop(0)
             self.size -= self.traj_len.pop(0)
         else:
-            # TODO add cpc forget functions here
-            self.trace_distance()
-            pass
+            distance_matrix = self.latent_distance()
+            closest_k = int(len(self.latents) * self.forget_percent)
+            ind = np.argpartition(distance_matrix, closest_k, axis=1)[:closest_k]
+            kmean_dis = np.take_along_axis(distance_matrix, ind, axis=1).mean(axis=1)
+            remove_index = np.argpartition(kmean_dis, closest_k, axis=-1)[:closest_k]
+            remove_index = np.sort(remove_index)[::-1]
+            for index in remove_index:
+                del self.trajectories[index]
+                del self.latents[index]
+                del self.meta[index]
+                self.size -= self.traj_len.pop(index)
 
-    def trace_distance(self):
-        pass
+    def latent_distance(self):
+        distance_matrix = np.empty((len(self.latents), len(self.latents),))
+        distance_matrix[:] = np.nan
+        for i in range(len(self.latents)):
+            for j in range(len(self.latents)):
+                if np.isnan(distance_matrix[i][j]):
+                    if i ==j:
+                        distance_matrix[i][j] = 0
+                    else:
+                        temp = accelerated_dtw(self.latents[i], self.latents[j], dist="euclidean")
+                        distance_matrix[i][j] = distance_matrix[j][i] = temp
+        return distance_matrix
 
     def sample_trans(self, batch_size, device=None):
         indexes = np.arange(len(self.trajectories))
@@ -173,7 +193,7 @@ class ReplayBufferOppo:
         print("updated latents")
 
     def is_full(self):
-        return len(self.trajectories) == self.max_size
+        return self.size >= self.max_size
 
     def __len__(self):
         return self.size
