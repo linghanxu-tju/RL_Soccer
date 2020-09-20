@@ -102,26 +102,36 @@ class ReplayBufferShare:
 
 
 class ReplayBufferOppo:
-    # for single thread or created in the child thread
-    def __init__(self, max_size, encoder, obs_dim):
+    def __init__(self, max_size, obs_dim, cpc=False):
         self.trajectories = list()
+        self.latents = list()
         self.traj_len = list()
-        self.encoder = encoder
+        self.meta = list()
         self.obs_dim = obs_dim
-        self.c_dim = self.encoder.c_dim
+        self.size = 0
+        self.cpc = cpc
         self.max_size = max_size
 
-    def store(self, trajectory):
+    def store(self, trajectory, latents=None, meta=None):
+        while self.size + len(trajectory) >= self.max_size:
+            self.forget()
         self.trajectories.append(trajectory)
         self.traj_len.append(len(trajectory))
-        if len(self.trajectories) >= self.max_size:
-            self.forget()
+        if self.cpc:
+            self.meta.append(meta)
+            self.latents.append(latents)
+        self.size += len(trajectory)
 
     def forget(self):
-        self.trajectories.pop(0)
-        self.traj_len.pop(0)
+        if not self.cpc:
+            self.trajectories.pop(0)
+            self.size -= self.traj_len.pop(0)
+        else:
+            # TODO add cpc forget functions here
+            self.trace_distance()
+            pass
 
-    def cluster(self):
+    def trace_distance(self):
         pass
 
     def sample_trans(self, batch_size, device=None):
@@ -133,15 +143,15 @@ class ReplayBufferOppo:
             sampled_trans.append(random.choice(self.trajectories[index]))
         obs_buf, obs2_buf, act_buf, rew_buf, done_buf = [], [], [], [], []
         for trans in sampled_trans:
-            obs_buf.append(np.concatenate((trans[0], trans[-2]), axis=0))   # o1 + c1
-            obs2_buf.append(np.concatenate((trans[3], trans[-1]), axis=0))  # o2 + c2
+            obs_buf.append(trans[0])
+            obs2_buf.append(trans[3])
             act_buf.append(trans[1])
             rew_buf.append(trans[2])
             done_buf.append(trans[4])
         batch = dict(obs=obs_buf, obs2=obs2_buf, act=act_buf, rew=rew_buf, done=done_buf)
         return {k: torch.as_tensor(v, dtype=torch.float32).to(device) for k, v in batch.items()}
 
-    # This function sample batch of trace  for  CPC training, only return the batch of obs
+    # This function sample batch of trace for CPC training, only return the batch of obs
     def sample_traj(self, batch_size):
         indexes = np.random.randint(len(self.trajectories), size=batch_size)
         min_len = min([self.traj_len[i] for i in indexes])
@@ -158,10 +168,16 @@ class ReplayBufferOppo:
     def update_latent(self, indexes, min_len, latents):
         for i, index in enumerate(indexes):
             for j in range(min_len):
-                self.trajectories[index][j][-2] = latents[i][j].cpu().numpy() # update c1
+                self.trajectories[index][j][-2] = latents[i][j].cpu().numpy()  # update c1
                 self.trajectories[index][j][-1] = latents[i][j+1].cpu().numpy()   # update c2
         print("updated latents")
 
     def is_full(self):
         return len(self.trajectories) == self.max_size
+
+    def __len__(self):
+        return self.size
+
+    def load_factor(self):
+        return self.size / self.max_size
 

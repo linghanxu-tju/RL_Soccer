@@ -183,11 +183,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         loss_q2 = F.mse_loss(q2, backup.unsqueeze(-1))
         loss_q = loss_q1 + loss_q2
 
-        # Useful info for logging
-        q_info = dict(Q1Vals=q1.detach().cpu().numpy(),
-                      Q2Vals=q2.detach().cpu().numpy())
-
-        return loss_q, q_info
+        return loss_q
 
     # Set up function for computing SAC pi loss
     def compute_loss_pi(data):
@@ -209,18 +205,11 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         # First run one gradient descent step for Q1 and Q2
         q1_optimizer.zero_grad()
         q2_optimizer.zero_grad()
-        loss_q, q_info = compute_loss_q(data)
+        loss_q = compute_loss_q(data)
         loss_q.backward()
         nn.utils.clip_grad_norm_(ac.parameters(), max_norm=10, norm_type=2)
         q1_optimizer.step()
         q2_optimizer.step()
-
-        # Record things
-
-        # Freeze Q-networks so you don't waste computational effort
-        # computing gradients for them during the policy learning step.
-        # for p in q_params:
-        #     p.requires_grad = False
 
         # Next run one gradient descent step for pi.
         pi_optimizer.zero_grad()
