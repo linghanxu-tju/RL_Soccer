@@ -22,7 +22,7 @@ from OppModeling.model_parameter_trans import state_dict_trans
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     # running setting
-    parser.add_argument('--cuda', default=True, action='store_true')
+    parser.add_argument('--cuda', default=False, action='store_true')
     parser.add_argument('--seed', '-s', type=int, default=0)
     parser.add_argument('--n_process', type=int, default=4)
     # basic env setting
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2, help="layers")
     parser.add_argument('--episode', type=int, default=100000)
-    parser.add_argument('--update_after', type=int, default=1000)
+    parser.add_argument('--update_after', type=int, default=500)
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
     parser.add_argument('--min_alpha', type=float, default=0.05)
@@ -49,11 +49,11 @@ if __name__ == '__main__':
     parser.add_argument('--polyak', type=float, default=0.995)
     # CPC setting
     parser.add_argument('--cpc', default=False, action="store_true")
-    parser.add_argument('--cpc_batch', type=int, default=32)
+    parser.add_argument('--cpc_batch', type=int, default=100)
     parser.add_argument('--z_dim', type=int, default=64)
-    parser.add_argument('--c_dim', type=int, default=3)
+    parser.add_argument('--c_dim', type=int, default=5)
     parser.add_argument('--timestep', type=int, default=5)
-    parser.add_argument('--cpc_update_freq', type=int, default=100,)
+    parser.add_argument('--cpc_update_freq', type=int, default=1,)
     parser.add_argument('--forget_percent', type=float, default=0.2,)
     # parser.add_argument('--load_factor', type=float, default=0.95)
 
@@ -191,7 +191,7 @@ if __name__ == '__main__':
         # SAC Update handling
         if e >= args.update_after and e % args.update_every == 0 and e != last_train:
             # if the batch size is very large, can train sac once per round
-            for _ in range(1):
+            for _ in range(args.update_every):
                 batch = replay_buffer.sample_trans(args.batch_size, device=device)
                 # First run one gradient descent step for Q1 and Q2
                 q1_optimizer.zero_grad()
@@ -214,7 +214,7 @@ if __name__ == '__main__':
                 alpha_loss = -(global_ac.log_alpha * (entropy + target_entropy).detach()).mean()
                 alpha_loss.backward(retain_graph=False)
                 nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=10, norm_type=2)
-                alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if not args.dynamic_alpha else args.min_alpha
+                alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if args.dynamic_alpha else args.min_alpha
                 alpha_optim.step()
 
                 # Finally, update target networks by polyak averaging.
@@ -248,6 +248,10 @@ if __name__ == '__main__':
                 writer.add_scalar("learner/cpc_acc", acc, e)
                 writer.add_scalar("learner/cpc_loss", loss.detach().item(), e)
                 c_hidden = global_cpc.init_hidden(1, args.c_dim)
+
+        # CPC latent update
+        if args.cpc and e > args.cpc_batch and e % 500 == 0:
+            replay_buffer.create_latents(e=e)
 
         # deliver the model and save
         if e % args.save_freq == 0 and e > 0 and e != last_saved:
