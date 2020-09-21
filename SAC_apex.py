@@ -43,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
     parser.add_argument('--min_alpha', type=float, default=0.05)
-    parser.add_argument('--fix_alpha', default=True, action="store_true")
+    parser.add_argument('--dynamic_alpha', default=False, action="store_true")
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--polyak', type=float, default=0.995)
@@ -52,11 +52,11 @@ if __name__ == '__main__':
     parser.add_argument('--cpc_batch', type=int, default=32)
     parser.add_argument('--z_dim', type=int, default=64)
     parser.add_argument('--c_dim', type=int, default=3)
-    parser.add_argument('--timestep', type=int, default=10)
+    parser.add_argument('--timestep', type=int, default=5)
     parser.add_argument('--cpc_update_freq', type=int, default=100,)
-    parser.add_argument('--forget_freq', type=int, default=100,)
-    parser.add_argument('--forget_percent', type=float, default=0.2, )
-    parser.add_argument('--load_factor', type=float, default=0.95)
+    parser.add_argument('--forget_percent', type=float, default=0.2,)
+    # parser.add_argument('--load_factor', type=float, default=0.95)
+
     # evaluation settings
     parser.add_argument('--test_episode', type=int, default=10)
     parser.add_argument('--test_every', type=int, default=100)
@@ -108,7 +108,7 @@ if __name__ == '__main__':
 
     if args.cpc:
         global_cpc = CPC(timestep=args.timestep, obs_dim=obs_dim, hidden_sizes=[args.hid] * args.l, z_dim=args.z_dim,
-                         c_dim=args.c_dim)
+                         c_dim=args.c_dim, device=device)
         var_counts = tuple(count_vars(module) for module in [global_cpc])
         print('\nNumber of CPC parameters: \t%d, \n' % var_counts)
     else:
@@ -129,7 +129,8 @@ if __name__ == '__main__':
     # training setup
     T = Counter()  # training steps
     E = Counter()  # training episode
-    replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc)
+    replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
+                                     cpc_model=global_cpc, writer=writer, E=E)
 
     if os.path.exists(os.path.join(args.save_dir, args.exp_name, args.model_para)):
         global_ac.load_state_dict(torch.load(os.path.join(args.save_dir, args.exp_name, args.model_para)))
@@ -173,7 +174,7 @@ if __name__ == '__main__':
         processes.append(p)
 
     target_entropy = -np.log((1.0 / act_dim)) * 0.5
-    alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if not args.fix_alpha else args.min_alpha
+    alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if args.dynamic_alpha else args.min_alpha
     # alpha = args.min_alpha
     while E.value() <= args.episode:
         # receive data from actors, will block if no data received
@@ -182,7 +183,7 @@ if __name__ == '__main__':
         # print("Finish Reading data from ACTOR!!!!!!")
         (trajectory, meta) = copy.deepcopy(received_data)
         del received_data
-        replay_buffer.store(trajectory)
+        replay_buffer.store(trajectory, meta=meta)
         E.increment()
         t = T.value()
         e = E.value()
@@ -213,7 +214,7 @@ if __name__ == '__main__':
                 alpha_loss = -(global_ac.log_alpha * (entropy + target_entropy).detach()).mean()
                 alpha_loss.backward(retain_graph=False)
                 nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=10, norm_type=2)
-                alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if not args.fix_alpha else args.min_alpha
+                alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if not args.dynamic_alpha else args.min_alpha
                 alpha_optim.step()
 
                 # Finally, update target networks by polyak averaging.
@@ -236,7 +237,7 @@ if __name__ == '__main__':
                 data, indexes, min_len = replay_buffer.sample_traj(args.cpc_batch)
                 global_cpc.train()
                 cpc_optimizer.zero_grad()
-                c_hidden = global_cpc.init_hidden(len(data), args.c_dim, use_gpu=args.cuda)
+                c_hidden = global_cpc.init_hidden(len(data), args.c_dim)
                 acc, loss, latents = global_cpc(data, c_hidden)
 
                 # replay_buffer.update_latent(indexes, min_len, latents.detach())
@@ -246,25 +247,7 @@ if __name__ == '__main__':
                 cpc_optimizer.step()
                 writer.add_scalar("learner/cpc_acc", acc, e)
                 writer.add_scalar("learner/cpc_loss", loss.detach().item(), e)
-                c_hidden = global_cpc.init_hidden(1, args.c_dim, use_gpu=args.cuda)
-
-        # CPC forgetting
-        if args.cpc and e > 0 and (e % args.forget_freq == 0 or replay_buffer.load_factor() > args.forget_level):
-            all_embeddings = list()
-            for trajectory in replay_buffer.trajectories:
-                obs = [tran[0] for tran in trajectory]
-                c_hidden = global_cpc.init_hidden(len(obs), args.c_dim, use_gpu=args.cuda)
-                traj_c, c_hidden = global_cpc.predict(obs, c_hidden)
-                all_embeddings.append(traj_c)
-            all_embeddings = np.array(all_embeddings)
-            replay_buffer.latents = all_embeddings
-            flat_meta = list()
-            for meta_traj in replay_buffer.meta:
-                for meta in meta_traj:
-                    flat_meta.append(meta)
-            writer.add_embedding(mat=all_embeddings.flatten(), metadata=flat_meta,
-                             metadata_header=["opponent", "rank", "round", "step", "reward", "action",])
-            replay_buffer.forget()
+                c_hidden = global_cpc.init_hidden(1, args.c_dim)
 
         # deliver the model and save
         if e % args.save_freq == 0 and e > 0 and e != last_saved:

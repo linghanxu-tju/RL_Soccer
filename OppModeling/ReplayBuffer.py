@@ -1,6 +1,7 @@
 import torch
 import random
 import numpy as np
+import multiprocessing as mp
 from OppModeling.utils import combined_shape
 from OppModeling.DTW import accelerated_dtw
 
@@ -69,8 +70,6 @@ class ReplayBuffer:
         return self.size == self.max_size
 
 
-
-
 class ReplayBufferShare:
     """
     A simple FIFO experience replay buffer for shared memory.
@@ -103,14 +102,17 @@ class ReplayBufferShare:
 
 
 class ReplayBufferOppo:
-    def __init__(self, max_size, obs_dim, cpc=False, forget_percent=0.2):
+    def __init__(self, max_size, obs_dim, cpc=False, forget_percent=0.2, cpc_model=None, writer=None,E=None):
         self.trajectories = list()
         self.latents = list()
         self.traj_len = list()
         self.meta = list()
         self.obs_dim = obs_dim
         self.size = 0
+        self.writer = writer
+        self.E = E
         self.cpc = cpc
+        self.cpc_model = cpc_model
         self.forget_percent = forget_percent
         self.max_size = max_size
 
@@ -129,6 +131,7 @@ class ReplayBufferOppo:
             self.trajectories.pop(0)
             self.size -= self.traj_len.pop(0)
         else:
+            self.create_latents()
             distance_matrix = self.latent_distance()
             closest_k = int(len(self.latents) * self.forget_percent)
             ind = np.argpartition(distance_matrix, closest_k, axis=1)[:closest_k]
@@ -141,17 +144,46 @@ class ReplayBufferOppo:
                 del self.meta[index]
                 self.size -= self.traj_len.pop(index)
 
+    def create_latents(self):
+        assert self.cpc_model is not None
+        assert self.writer is not None
+        latents = list()
+        all_embeddings = list()
+        for trajectory in self.trajectories:
+            obs = [tran[0] for tran in trajectory]
+            c_hidden = self.cpc_model.init_hidden(1, self.cpc_model.c_dim)
+            traj_c, c_hidden = self.cpc_model.predict(obs, c_hidden)
+            latents.append(traj_c.squeeze().cpu().numpy())
+            all_embeddings += traj_c.squeeze().tolist()
+        self.latents = np.array(latents)
+        flat_meta = list()
+        for meta_traj in self.meta:
+            for meta in meta_traj:
+                flat_meta.append(meta)
+        self.writer.add_embedding(mat=np.array(all_embeddings), metadata=flat_meta,global_step=self.E.value(),
+                             metadata_header=["opponent", "rank", "round", "step", "reward", "action", ])
+
     def latent_distance(self):
         distance_matrix = np.empty((len(self.latents), len(self.latents),))
         distance_matrix[:] = np.nan
+        latents = self.latents
+        seq = [(i, j) for i in range(len(self.latents)) for j in range(i)]
+
+        def worker(i, j):
+            if i == j: dis = 0
+            else: dis, _, _, _ = accelerated_dtw(latents[i], latents[j], dist="euclidean")
+            return dis
+        with mp.Pool() as p:
+            distances = p.starmap(worker, seq)
+        index = 0
         for i in range(len(self.latents)):
             for j in range(len(self.latents)):
                 if np.isnan(distance_matrix[i][j]):
-                    if i ==j:
+                    if i == j:
                         distance_matrix[i][j] = 0
                     else:
-                        temp = accelerated_dtw(self.latents[i], self.latents[j], dist="euclidean")
-                        distance_matrix[i][j] = distance_matrix[j][i] = temp
+                        distance_matrix[i][j] = distance_matrix[j][i] = distances[index]
+                        index += 1
         return distance_matrix
 
     def sample_trans(self, batch_size, device=None):

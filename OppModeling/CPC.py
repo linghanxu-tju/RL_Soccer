@@ -1,3 +1,4 @@
+# code based on https://github.com/jefflai108/Contrastive-Predictive-Coding-PyTorch/blob/master/src/model/model.py
 import time
 import logging
 import argparse
@@ -11,14 +12,15 @@ from OppModeling.utils import mlp
 
 
 class CPC(nn.Module):
-    def __init__(self, timestep, obs_dim, hidden_sizes,z_dim, c_dim):
+    def __init__(self, timestep, obs_dim, hidden_sizes,z_dim, c_dim,device=None):
         super(CPC, self).__init__()
         self.timestep = timestep
         self.c_dim = c_dim
         self.z_dim = z_dim
-        self.encoder = mlp([obs_dim] + list(hidden_sizes) + [z_dim], nn.ReLU, nn.Identity)
-        self.gru = nn.GRU(z_dim, c_dim, num_layers=1, bidirectional=False, batch_first=True)
-        self.Wk = nn.ModuleList([nn.Linear(c_dim, z_dim) for i in range(timestep)])
+        self.device = device
+        self.encoder = mlp([obs_dim] + list(hidden_sizes) + [z_dim], nn.ReLU, nn.Identity).to(device)
+        self.gru = nn.GRU(z_dim, c_dim, num_layers=1, bidirectional=False, batch_first=True).to(device)
+        self.Wk = nn.ModuleList([nn.Linear(c_dim, z_dim) for _ in range(timestep)]).to(device)
         self.softmax = F.softmax
         self.lsoftmax = F.log_softmax
 
@@ -39,14 +41,11 @@ class CPC(nn.Module):
 
         self.apply(_weights_init)
 
-    def init_hidden(self, batch_size, feature_dim, use_gpu=True):
-        if use_gpu:
-            return torch.zeros(1, batch_size, feature_dim).cuda()
-        else:
-            return torch.zeros(1, batch_size, feature_dim)
+    def init_hidden(self, batch_size, feature_dim):
+            return torch.zeros(1, batch_size, feature_dim).to(self.device)
 
     def get_z(self, x):
-        x = torch.tensor(x, dtype=torch.float32)
+        x = torch.tensor(x, dtype=torch.float32,device=self.device)
         if len(x.shape) == 1:
             x = x.unsqueeze(dim=0)
         if len(x.shape) == 2:
@@ -54,7 +53,7 @@ class CPC(nn.Module):
         batch = x.size()[0]
         seq_len = x.size()[1]
         obs_dim = x.size()[2]
-        z = torch.empty((batch, seq_len, self.z_dim)).float()  # e.g. size 12*8*512
+        z = torch.empty((batch, seq_len, self.z_dim), device=self.device).float()  # e.g. size 12*8*512
         for i in range(seq_len):
             z[:, i, :] = self.encoder(x[:, i, :])
         return z, batch, seq_len, obs_dim
@@ -64,11 +63,11 @@ class CPC(nn.Module):
         z, batch, seq_len, obs_dim = self.get_z(x)
         # no Down sampling in RL
         assert self.timestep < seq_len
-        t_samples = torch.randint(seq_len - self.timestep, size=(1,)).long()  # randomly pick time stamps
+        t_samples = torch.randint(seq_len - self.timestep, size=(1,),device=self.device).long()  # randomly pick time stamps
         # Do not need transpose as the input shape is N*L*C
         # z = z.transpose(1, 2)
         nce = 0  # average over timestep and batch
-        encode_samples = torch.empty((self.timestep, batch, self.z_dim)).float()  # e.g. size 12*8*512
+        encode_samples = torch.empty((self.timestep, batch, self.z_dim),device=self.device).float()  # e.g. size 12*8*512
         for i in np.arange(1, self.timestep + 1):
             encode_samples[i - 1] = z[:, (t_samples + i).long(), :].view(batch, self.z_dim)  # z_tk e.g. size 8*512
         forward_seq = z[:, :t_samples + 1, :]  # e.g. size 8*100*512
@@ -78,15 +77,15 @@ class CPC(nn.Module):
             latents, _ = self.gru(z, c_hidden)  # output size e.g. 8*100*256
         output, _ = self.gru(forward_seq, c_hidden)  # output size e.g. 8*100*256
         c_t = output[:, t_samples, :].view(batch, self.c_dim)  # c_t e.g. size 8*256
-        pred = torch.empty((self.timestep, batch, self.z_dim)).float()  # e.g. size 12*8*512
+        pred = torch.empty((self.timestep, batch, self.z_dim), device=self.device).float() # e.g. size 12*8*512
         for i in np.arange(0, self.timestep):
             linear = self.Wk[i]
             pred[i] = linear(c_t)  # Wk*c_t e.g. size 8*512
         for i in np.arange(0, self.timestep):
             total = torch.mm(encode_samples[i], torch.transpose(pred[i], 0, 1))  # e.g. size 8*8
             correct = torch.sum(
-                torch.eq(torch.argmax(self.softmax(total), dim=0), torch.arange(0, batch)))  # correct is a tensor
-            nce += torch.sum(torch.diag(self.lsoftmax(total)))  # nce is a tensor
+                torch.eq(torch.argmax(self.softmax(total, dim=0), dim=0), torch.arange(0, batch).to(self.device)))  # correct is a tensor
+            nce += torch.sum(torch.diag(self.lsoftmax(total, dim=0)))  # nce is a tensor
         nce /= -1. * batch * self.timestep
         accuracy = 1. * correct.item() / batch
 
