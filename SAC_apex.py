@@ -49,13 +49,12 @@ if __name__ == '__main__':
     parser.add_argument('--polyak', type=float, default=0.995)
     # CPC setting
     parser.add_argument('--cpc', default=False, action="store_true")
-    parser.add_argument('--cpc_batch', type=int, default=100)
+    parser.add_argument('--cpc_batch', type=int, default=128)
     parser.add_argument('--z_dim', type=int, default=64)
     parser.add_argument('--c_dim', type=int, default=5)
     parser.add_argument('--timestep', type=int, default=5)
     parser.add_argument('--cpc_update_freq', type=int, default=1,)
     parser.add_argument('--forget_percent', type=float, default=0.2,)
-    # parser.add_argument('--load_factor', type=float, default=0.95)
 
     # evaluation settings
     parser.add_argument('--test_episode', type=int, default=10)
@@ -130,7 +129,7 @@ if __name__ == '__main__':
     T = Counter()  # training steps
     E = Counter()  # training episode
     replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
-                                     cpc_model=global_cpc, writer=writer, E=E)
+                                     cpc_model=global_cpc, writer=writer)
 
     if os.path.exists(os.path.join(args.save_dir, args.exp_name, args.model_para)):
         global_ac.load_state_dict(torch.load(os.path.join(args.save_dir, args.exp_name, args.model_para)))
@@ -233,9 +232,8 @@ if __name__ == '__main__':
 
         # CPC update handing
         if args.cpc and e > args.cpc_batch and e % args.cpc_update_freq == 0:
-            for _ in range(args.cpc_update_freq):
+            for _ in range(args.cpc_update_freq * 10):
                 data, indexes, min_len = replay_buffer.sample_traj(args.cpc_batch)
-                global_cpc.train()
                 cpc_optimizer.zero_grad()
                 c_hidden = global_cpc.init_hidden(len(data), args.c_dim)
                 acc, loss, latents = global_cpc(data, c_hidden)
