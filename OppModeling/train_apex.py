@@ -27,8 +27,10 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
     #     env = make_ftg_ram(args.env, p2=args.p2)
     # obs_dim = env.observation_space.shape[0]
     # act_dim = env.action_space.n
-    env = SoccerPLUS(visual=True)
+    env = SoccerPLUS()
     opp_policy = Policy(game=env, player_num=False)
+    opps = [0] * 50 + [1] * 50 + [2] * 50 + [3] * 50
+    opp = opps[0]
     obs_dim = env.n_features
     act_dim = env.n_actions
     ac_kwargs = dict(hidden_sizes=[args.hid] * args.l)
@@ -59,7 +61,7 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
 
         # print(o)
         # Step the env
-        o2, r, d, info = env.step(a, opp_policy.get_actions(1))
+        o2, r, d, info = env.step(a, opp_policy.get_actions(opp))
         env.render()
         if info.get('no_data_receive', False):
             discard = True
@@ -68,10 +70,10 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
 
         d = False if (ep_len == args.max_ep_len) or discard else d
         # send the transition to main process
-        if hasattr(env, 'p2'):
-            opp = env.p2
-        else:
-            opp = None
+        # if hasattr(env, 'p2'):
+        #     opp = env.p2
+        # else:
+        #     opp = None
         transition = (o, a, r, o2, d)
         trajectory.append(transition)
         meta.append([opp, rank, local_e, ep_len, r, a])
@@ -93,13 +95,14 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
             win_rate = np.mean(wins[-100:])
             print(
                 "Process\t{}\topponent:{},\t# of local episode :{},\tglobal episode {}\tround score: {},\tmean score : {:.1f},\twin rate:{},\tsteps: {}".format(
-                    rank, args.p2, local_e, e, ep_ret, m_score, win_rate, ep_len))
+                    rank, opp, local_e, e, ep_ret, m_score, win_rate, ep_len))
             writer.add_scalar("actor/round_score", ep_ret, local_e)
             writer.add_scalar("actor/mean_score", m_score.item(), local_e)
             writer.add_scalar("actor/win_rate", win_rate.item(), local_e)
             writer.add_scalar("actor/round_step", ep_len, local_e)
             writer.add_scalar("actor/learner_actor_speed", e, local_e)
             o, ep_ret, ep_len = env.reset(), 0, 0
+            opp = opps[local_e % len(opps)]
             discard = False
             trajectory, meta = list(), list()
             if not model_q.empty():

@@ -11,13 +11,13 @@ import torch.multiprocessing as mp
 from torch.optim import Adam
 from copy import deepcopy
 from torch.utils.tensorboard import SummaryWriter
-from OppModeling.ReplayBuffer import ReplayBuffer, ReplayBufferOppo
-from OppModeling.utils import Counter, count_vars
+from OppModeling.atari_wrappers import make_ftg_ram, make_ftg_ram_nonstation
+from OppModeling.utils import Counter
 from OppModeling.SAC import MLPActorCritic
 from OppModeling.CPC import CPC
-from OppModeling.train_apex import sac
+from OppModeling.ReplayBuffer import ReplayBufferOppo
 from games import Soccer, SoccerPLUS
-from OppModeling.model_parameter_trans import state_dict_trans
+from OppModeling.train_apex import sac
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--station_rounds', type=int, default=1000)
     parser.add_argument('--list', nargs='+')
     # sac setting
-    parser.add_argument('--replay_size', type=int, default=10000)
+    parser.add_argument('--replay_size', type=int, default=50000)
     parser.add_argument('--batch_size', type=int, default=4096)
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2, help="layers")
@@ -44,15 +44,15 @@ if __name__ == '__main__':
     parser.add_argument('--max_ep_len', type=int, default=1000)
     parser.add_argument('--min_alpha', type=float, default=0.05)
     parser.add_argument('--dynamic_alpha', default=False, action="store_true")
-    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--gamma', type=float, default=0.95)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--polyak', type=float, default=0.995)
     # CPC setting
     parser.add_argument('--cpc', default=False, action="store_true")
-    parser.add_argument('--cpc_batch', type=int, default=128)
-    parser.add_argument('--z_dim', type=int, default=64)
-    parser.add_argument('--c_dim', type=int, default=5)
-    parser.add_argument('--timestep', type=int, default=5)
+    parser.add_argument('--cpc_batch', type=int, default=100)
+    parser.add_argument('--z_dim', type=int, default=32)
+    parser.add_argument('--c_dim', type=int, default=16)
+    parser.add_argument('--timestep', type=int, default=10)
     parser.add_argument('--cpc_update_freq', type=int, default=1,)
     parser.add_argument('--forget_percent', type=float, default=0.2,)
 
@@ -60,8 +60,8 @@ if __name__ == '__main__':
     parser.add_argument('--test_episode', type=int, default=10)
     parser.add_argument('--test_every', type=int, default=100)
     # Saving settings
-    parser.add_argument('--save_freq', type=int, default=100)
-    parser.add_argument('--exp_name', type=str, default='SoccerPlus')
+    parser.add_argument('--save_freq', type=int, default=500)
+    parser.add_argument('--exp_name', type=str, default='new_cpc_obs')
     parser.add_argument('--save-dir', type=str, default="./experiments")
     parser.add_argument('--traj_dir', type=str, default="./experiments")
     parser.add_argument('--model_para', type=str, default="sac.torch")
@@ -102,14 +102,8 @@ if __name__ == '__main__':
     act_dim = env.n_actions
     # create model
     global_ac = MLPActorCritic(obs_dim, act_dim, **ac_kwargs)
-    var_counts = tuple(count_vars(module) for module in [global_ac.pi, global_ac.q1, global_ac.q2])
-    print('\nNumber of SAC parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
-
     if args.cpc:
-        global_cpc = CPC(timestep=args.timestep, obs_dim=obs_dim, hidden_sizes=[args.hid] * args.l, z_dim=args.z_dim,
-                         c_dim=args.c_dim, device=device)
-        var_counts = tuple(count_vars(module) for module in [global_cpc])
-        print('\nNumber of CPC parameters: \t%d, \n' % var_counts)
+        global_cpc = CPC(timestep=args.timestep, obs_dim=obs_dim, hidden_sizes=[args.hid] * args.l, z_dim=args.z_dim,c_dim=args.c_dim, device=device)
     else:
         global_cpc = None
     # create shared model for actor
@@ -144,7 +138,7 @@ if __name__ == '__main__':
         print("load training indicator")
 
     last_updated = 0
-    last_train = 0
+    last_deliver = 0
     last_saved = 0
     if args.cuda:
         global_ac.to(device)
@@ -170,27 +164,37 @@ if __name__ == '__main__':
         #     p = mp.Process(target=sac, args=(model_q, rank, E, args,  buffer_q, torch.device("cpu"), tensorboard_dir))
         p = mp.Process(target=sac, args=(rank, E, args, model_q[rank], buffer_q, torch.device("cpu"), tensorboard_dir))
         p.start()
+        # time.sleep(5)
         processes.append(p)
 
     target_entropy = -np.log((1.0 / act_dim)) * 0.5
     alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if args.dynamic_alpha else args.min_alpha
     # alpha = args.min_alpha
+    e = E.value()
     while E.value() <= args.episode:
-        # receive data from actors, will block if no data received
-        # print("Going to read data from ACTOR......")
-        received_data = buffer_q.get()
-        # print("Finish Reading data from ACTOR!!!!!!")
-        (trajectory, meta) = copy.deepcopy(received_data)
-        del received_data
-        replay_buffer.store(trajectory, meta=meta)
-        E.increment()
         t = T.value()
+
+        if not buffer_q.empty():
+            # print("Going to read data from ACTOR...")
+            # before_rece = time.time()
+            received_data = buffer_q.get()
+            # wait_time = time.time() - before_rece
+            # print("waited {}s Reading data from ACTOR!!!".format(wait_time))
+            (trajectory, meta) = copy.deepcopy(received_data)
+            del received_data
+            if args.cpc and len(trajectory) <= args.timestep:
+                continue
+            replay_buffer.store(trajectory, meta=meta)
+            writer.add_scalar("learner/buffer_size", replay_buffer.size, e)
+            E.increment()
         e = E.value()
 
         # SAC Update handling
-        if e >= args.update_after and e % args.update_every == 0 and e != last_train:
+        if e >= args.update_after:
             # if the batch size is very large, can train sac once per round
             for _ in range(args.update_every):
+                T.increment()
+                t = T.value()
                 batch = replay_buffer.sample_trans(args.batch_size, device=device)
                 # First run one gradient descent step for Q1 and Q2
                 q1_optimizer.zero_grad()
@@ -198,7 +202,7 @@ if __name__ == '__main__':
 
                 loss_q = global_ac.compute_loss_q(batch, global_ac_targ, args.gamma, alpha)
                 loss_q.backward()
-                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=10, norm_type=2)
+                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=20, norm_type=2)
                 q1_optimizer.step()
                 q2_optimizer.step()
 
@@ -206,13 +210,13 @@ if __name__ == '__main__':
                 pi_optimizer.zero_grad()
                 loss_pi, entropy = global_ac.compute_loss_pi(batch, alpha)
                 loss_pi.backward()
-                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=10, norm_type=2)
+                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=20, norm_type=2)
                 pi_optimizer.step()
 
                 alpha_optim.zero_grad()
                 alpha_loss = -(global_ac.log_alpha * (entropy + target_entropy).detach()).mean()
                 alpha_loss.backward(retain_graph=False)
-                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=10, norm_type=2)
+                nn.utils.clip_grad_norm_(global_ac.parameters(), max_norm=20, norm_type=2)
                 alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if args.dynamic_alpha else args.min_alpha
                 alpha_optim.step()
 
@@ -226,13 +230,10 @@ if __name__ == '__main__':
                 writer.add_scalar("learner/alpha_loss", alpha_loss.detach().item(), t)
                 writer.add_scalar("learner/alpha", alpha, t)
                 writer.add_scalar("learner/entropy", entropy.detach().mean().item(), t)
-                writer.add_scalar("learner/buffer_size", replay_buffer.size, t)
-                last_train = e
-                T.increment()
 
         # CPC update handing
         if args.cpc and e > args.cpc_batch and e % args.cpc_update_freq == 0:
-            for _ in range(args.cpc_update_freq * 10):
+            for _ in range(args.cpc_update_freq):
                 data, indexes, min_len = replay_buffer.sample_traj(args.cpc_batch)
                 cpc_optimizer.zero_grad()
                 c_hidden = global_cpc.init_hidden(len(data), args.c_dim)
@@ -243,26 +244,30 @@ if __name__ == '__main__':
                 # add gradient clipping
                 nn.utils.clip_grad_norm_(global_cpc.parameters(), max_norm=20, norm_type=2)
                 cpc_optimizer.step()
-                writer.add_scalar("learner/cpc_acc", acc, e)
-                writer.add_scalar("learner/cpc_loss", loss.detach().item(), e)
-                c_hidden = global_cpc.init_hidden(1, args.c_dim)
+                writer.add_scalar("learner/cpc_acc", acc, t)
+                writer.add_scalar("learner/cpc_loss", loss.detach().item(), t)
 
         # CPC latent update
-        if args.cpc and e > args.cpc_batch and e % 500 == 0:
+        if args.cpc and e > args.cpc_batch and e % 200 == 0 and e != last_updated:
             replay_buffer.create_latents(e=e)
+            last_updated = e
 
-        # deliver the model and save
-        if e % args.save_freq == 0 and e > 0 and e != last_saved:
+        # deliver the model
+        if e % (args.n_process * 2) == 0 and e > args.save_freq and e != last_deliver:
             temp = copy.deepcopy(global_ac).cpu()
             shared_ac_state_dict = copy.deepcopy(temp.state_dict())
             for i in range(args.n_process):
                 model_q[i].put(shared_ac_state_dict, )
+            last_deliver = e
+
+        # save the model
+        if e % args.save_freq == 0 and e > 0 and e != last_saved:
             torch.save(global_ac.state_dict(), os.path.join(experiment_dir, args.model_para))
             if args.cpc:
                 torch.save(global_cpc.state_dict(), os.path.join(experiment_dir, args.cpc_para))
             # state_dict_trans(global_ac.state_dict(), os.path.join(experiment_dir, args.numpy_para))
             # torch.save((e, t, list(scores), list(wins)), os.path.join(args.save_dir, args.exp_name, "model_data_{}".format(e)))
-            print("Saving model at episode:{}".format(t))
+            print("Saving model at episode:{}".format(e))
             last_saved = e
 
         # if e > 0 and e % args.test_every == 0 and tested_e != e:
