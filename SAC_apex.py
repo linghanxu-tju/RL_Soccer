@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2, help="layers")
     parser.add_argument('--episode', type=int, default=100000)
-    parser.add_argument('--update_after', type=int, default=500)
+    parser.add_argument('--update_after', type=int, default=1000)
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
     parser.add_argument('--min_alpha', type=float, default=0.05)
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--polyak', type=float, default=0.995)
     # CPC setting
     parser.add_argument('--cpc', default=False, action="store_true")
-    parser.add_argument('--cpc_batch', type=int, default=100)
+    parser.add_argument('--cpc_batch', type=int, default=512)
     parser.add_argument('--z_dim', type=int, default=32)
     parser.add_argument('--c_dim', type=int, default=16)
     parser.add_argument('--timestep', type=int, default=10)
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_every', type=int, default=100)
     # Saving settings
     parser.add_argument('--save_freq', type=int, default=500)
-    parser.add_argument('--exp_name', type=str, default='new_cpc_obs')
+    parser.add_argument('--exp_name', type=str, default='new_cpc_reborn')
     parser.add_argument('--save-dir', type=str, default="./experiments")
     parser.add_argument('--traj_dir', type=str, default="./experiments")
     parser.add_argument('--model_para', type=str, default="sac.torch")
@@ -232,7 +232,7 @@ if __name__ == '__main__':
                 writer.add_scalar("learner/entropy", entropy.detach().mean().item(), t)
 
         # CPC update handing
-        if args.cpc and e > args.cpc_batch and e % args.cpc_update_freq == 0:
+        if args.cpc and e > args.cpc_batch * 2 and e % args.cpc_update_freq == 0:
             for _ in range(args.cpc_update_freq):
                 data, indexes, min_len = replay_buffer.sample_traj(args.cpc_batch)
                 cpc_optimizer.zero_grad()
@@ -248,7 +248,7 @@ if __name__ == '__main__':
                 writer.add_scalar("learner/cpc_loss", loss.detach().item(), t)
 
         # CPC latent update
-        if args.cpc and e > args.cpc_batch and e % 200 == 0 and e != last_updated:
+        if args.cpc and e > args.cpc_batch and e % 500 == 0 and e != last_updated:
             replay_buffer.create_latents(e=e)
             last_updated = e
 

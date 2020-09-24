@@ -63,7 +63,9 @@ class CPC(nn.Module):
         z, batch, seq_len, obs_dim = self.get_z(x)
         # no Down sampling in RL
         assert self.timestep < seq_len
-        t_samples = torch.randint(seq_len - self.timestep, size=(1,),device=self.device).long()  # randomly pick time stamps
+        # as the all the DRL traj are similar at the beginning, force the anchor point to be larger to help cpc training
+        start = seq_len//2 if seq_len - self.timestep > seq_len//2 else 0
+        t_samples = torch.randint(low=start, high=seq_len - self.timestep, size=(1,),device=self.device).long()  # randomly pick time stamps
         # Do not need transpose as the input shape is N*L*C
         # z = z.transpose(1, 2)
         nce = 0  # average over timestep and batch

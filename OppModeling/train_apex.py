@@ -29,7 +29,7 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
     # act_dim = env.action_space.n
     env = SoccerPLUS()
     opp_policy = Policy(game=env, player_num=False)
-    opps = [0] * 50 + [1] * 50 + [2] * 50 + [3] * 50
+    opps = [0] * 10 + [1] * 10 + [2] * 10 + [3] * 10
     opp = opps[0]
     obs_dim = env.n_features
     act_dim = env.n_actions

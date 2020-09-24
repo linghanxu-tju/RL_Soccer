@@ -70,19 +70,23 @@ class Player:
 
 
 class Soccer(tk.Tk if VISUAL else object):
-    playground = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-                  3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
-                  3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
-                  3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
-                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
-                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ]
+    playground = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+                  3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+                  3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ]
     action_map = {
         UP: np.array([-1, 0]),
         RIGHT: np.array([0, 1]),
@@ -307,7 +311,7 @@ class SoccerPLUS(Soccer):
         self.player_agent.set_ball(self.agent_keep_ball)
         self.player_opponent.set_ball(not self.agent_keep_ball)
         self.n_actions = len(self.action_map)
-        self.n_features = 7
+        self.n_features = 8
 
     def step(self, act_a, act_o):
         assert np.array_equal(self.player_agent.get_location(), self.agent) and np.array_equal(self.player_opponent.get_location(), self.opponent)
@@ -341,7 +345,15 @@ class SoccerPLUS(Soccer):
             self.canvas.delete(self.opp_rect)
             self.canvas.delete(self.ball_rect)
             self.update_canvas()
-        s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.player_agent.get_energy()/self.player_agent.max_energy, self.opponent[0]/self.size, self.opponent[1]/self.size, self.player_opponent.get_energy()/self.player_opponent.max_energy, int(self.agent_keep_ball)]
+        s_ = [self.agent[0]/self.size,
+              self.agent[1]/self.size,
+              self.player_agent.get_energy()/self.player_agent.max_energy,
+              self.opponent[0]/self.size,
+              self.opponent[1]/self.size,
+              self.player_opponent.get_energy()/self.player_opponent.max_energy,
+              int(self.agent_keep_ball),
+              self.counter/self.max_steps,
+              ]
         s_ = np.array(s_,dtype=np.float)
         if done:
             self.done = done
@@ -361,7 +373,15 @@ class SoccerPLUS(Soccer):
         self.player_opponent.set_energy(2)
         self.player_agent.set_ball(self.agent_keep_ball)
         self.player_opponent.set_ball(not self.agent_keep_ball)
-        s_ = [self.agent[0]/self.size, self.agent[1]/self.size, self.player_agent.get_energy()/self.player_agent.max_energy, self.opponent[0]/self.size, self.opponent[1]/self.size, self.player_opponent.get_energy()/self.player_opponent.max_energy, int(self.agent_keep_ball)]
+        s_ = [self.agent[0]/self.size,
+              self.agent[1]/self.size,
+              self.player_agent.get_energy()/self.player_agent.max_energy,
+              self.opponent[0]/self.size,
+              self.opponent[1]/self.size,
+              self.player_opponent.get_energy()/self.player_opponent.max_energy,
+              int(self.agent_keep_ball),
+              self.counter/self.max_steps,
+              ]
         s_ = np.array(s_,dtype=np.float)
         return s_
 

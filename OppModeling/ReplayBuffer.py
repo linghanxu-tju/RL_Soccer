@@ -204,7 +204,10 @@ class ReplayBufferOppo:
 
     # This function sample batch of trace for CPC training, only return the batch of obs
     def sample_traj(self, batch_size):
+        batch_size *= 2
         indexes = np.random.randint(len(self.trajectories), size=batch_size)
+        mean_len = np.median([self.traj_len[i] for i in indexes])
+        indexes = [i for i in indexes if self.traj_len[i] >= mean_len]
         min_len = min([self.traj_len[i] for i in indexes])
         # cut off using the min length
         batch = []
@@ -212,7 +215,7 @@ class ReplayBufferOppo:
             # each sampled trace obs len = min_len + 1(the last o2 in this trace)
             batch.append([self.trajectories[i][j][0] for j in range(min_len)] + [self.trajectories[i][min_len-1][3]])
         batch = np.array(batch, dtype=np.float)
-        assert batch.shape == (batch_size, min_len + 1, self.obs_dim)
+        assert batch.shape == (len(indexes), min_len + 1, self.obs_dim)
         return batch, indexes, min_len
 
     # currently can only update the trans index less than min
