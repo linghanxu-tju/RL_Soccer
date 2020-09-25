@@ -18,6 +18,7 @@ from OppModeling.CPC import CPC
 from OppModeling.ReplayBuffer import ReplayBufferOppo
 from games import Soccer, SoccerPLUS
 from OppModeling.train_apex import sac
+from OppModeling.evaluation_apex import test_func
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -34,12 +35,12 @@ if __name__ == '__main__':
     parser.add_argument('--station_rounds', type=int, default=1000)
     parser.add_argument('--list', nargs='+')
     # sac setting
-    parser.add_argument('--replay_size', type=int, default=50000)
-    parser.add_argument('--batch_size', type=int, default=4096)
+    parser.add_argument('--replay_size', type=int, default=5000)
+    parser.add_argument('--batch_size', type=int, default=1024)
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2, help="layers")
     parser.add_argument('--episode', type=int, default=100000)
-    parser.add_argument('--update_after', type=int, default=1000)
+    parser.add_argument('--update_after', type=int, default=500)
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
     parser.add_argument('--min_alpha', type=float, default=0.05)
@@ -49,19 +50,19 @@ if __name__ == '__main__':
     parser.add_argument('--polyak', type=float, default=0.995)
     # CPC setting
     parser.add_argument('--cpc', default=False, action="store_true")
-    parser.add_argument('--cpc_batch', type=int, default=512)
+    parser.add_argument('--cpc_batch', type=int, default=256)
     parser.add_argument('--z_dim', type=int, default=32)
     parser.add_argument('--c_dim', type=int, default=16)
     parser.add_argument('--timestep', type=int, default=10)
-    parser.add_argument('--cpc_update_freq', type=int, default=1,)
-    parser.add_argument('--forget_percent', type=float, default=0.2,)
+    parser.add_argument('--cpc_update_freq', type=int, default=1, )
+    parser.add_argument('--forget_percent', type=float, default=0.2, )
 
     # evaluation settings
-    parser.add_argument('--test_episode', type=int, default=10)
-    parser.add_argument('--test_every', type=int, default=100)
+    parser.add_argument('--test_episode', type=int, default=100)
+    parser.add_argument('--test_every', type=int, default=500)
     # Saving settings
     parser.add_argument('--save_freq', type=int, default=500)
-    parser.add_argument('--exp_name', type=str, default='new_cpc_reborn')
+    parser.add_argument('--exp_name', type=str, default='ub_50000_1')
     parser.add_argument('--save-dir', type=str, default="./experiments")
     parser.add_argument('--traj_dir', type=str, default="./experiments")
     parser.add_argument('--model_para', type=str, default="sac.torch")
@@ -103,7 +104,8 @@ if __name__ == '__main__':
     # create model
     global_ac = MLPActorCritic(obs_dim, act_dim, **ac_kwargs)
     if args.cpc:
-        global_cpc = CPC(timestep=args.timestep, obs_dim=obs_dim, hidden_sizes=[args.hid] * args.l, z_dim=args.z_dim,c_dim=args.c_dim, device=device)
+        global_cpc = CPC(timestep=args.timestep, obs_dim=obs_dim, hidden_sizes=[args.hid] * args.l, z_dim=args.z_dim,
+                         c_dim=args.c_dim, device=device)
     else:
         global_cpc = None
     # create shared model for actor
@@ -123,7 +125,7 @@ if __name__ == '__main__':
     T = Counter()  # training steps
     E = Counter()  # training episode
     replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
-                                     cpc_model=global_cpc, writer=writer)
+                                     cpc_model=global_cpc, writer=writer,E=E)
 
     if os.path.exists(os.path.join(args.save_dir, args.exp_name, args.model_para)):
         global_ac.load_state_dict(torch.load(os.path.join(args.save_dir, args.exp_name, args.model_para)))
@@ -140,6 +142,7 @@ if __name__ == '__main__':
     last_updated = 0
     last_deliver = 0
     last_saved = 0
+    test_e = 0
     if args.cuda:
         global_ac.to(device)
         global_ac_targ.to(device)
@@ -150,19 +153,17 @@ if __name__ == '__main__':
         p.requires_grad = False
 
     buffer_q = mp.SimpleQueue()
-    model_q = [mp.SimpleQueue() for _ in range(args.n_process)]
+    model_q = [mp.SimpleQueue() for _ in range(args.n_process + 1)]  # 1 test model queue
     processes = []
     # Process 0 for evaluation
-    for rank in range(args.n_process):  # 4 test process
+    for rank in range(args.n_process + 1):  # 1 test process
         model_q[rank].put(shared_ac.state_dict())
         # Test during training
-        # if rank == 0:
-        #     p = mp.Process(target=test_func, args=(test_q, rank, E, "Non-station", args, torch.device("cpu"),tensorboard_dir))
-        # elif rank < 4:
-        #     p = mp.Process(target=test_func, args=(test_q, rank, E, args.list[(rank-1) % len(args.list)], args, torch.device("cpu"), tensorboard_dir))
-        # else:
-        #     p = mp.Process(target=sac, args=(model_q, rank, E, args,  buffer_q, torch.device("cpu"), tensorboard_dir))
-        p = mp.Process(target=sac, args=(rank, E, args, model_q[rank], buffer_q, torch.device("cpu"), tensorboard_dir))
+        if rank == 0:
+            p = mp.Process(target=test_func, args=(rank, E, args, model_q[rank], torch.device("cpu"), tensorboard_dir))
+        else:
+            p = mp.Process(target=sac,
+                           args=(rank, E, args, model_q[rank], buffer_q, torch.device("cpu"), tensorboard_dir))
         p.start()
         # time.sleep(5)
         processes.append(p)
@@ -248,17 +249,24 @@ if __name__ == '__main__':
                 writer.add_scalar("learner/cpc_loss", loss.detach().item(), t)
 
         # CPC latent update
-        if args.cpc and e > args.cpc_batch and e % 500 == 0 and e != last_updated:
-            replay_buffer.create_latents(e=e)
-            last_updated = e
+        # if args.cpc and e > args.cpc_batch and e % 500 == 0 and e != last_updated:
+        #     replay_buffer.create_latents(e=e)
+        #     last_updated = e
 
         # deliver the model
         if e % (args.n_process * 2) == 0 and e > args.save_freq and e != last_deliver:
             temp = copy.deepcopy(global_ac).cpu()
             shared_ac_state_dict = copy.deepcopy(temp.state_dict())
-            for i in range(args.n_process):
+            for i in range(1, args.n_process+1):  # 0 is test model queue
                 model_q[i].put(shared_ac_state_dict, )
             last_deliver = e
+
+        # evaluation model
+        if e > 0 and e % args.test_every == 0 and test_e != e:
+            temp = copy.deepcopy(global_ac).cpu()
+            test_model = copy.deepcopy(temp.state_dict())
+            model_q[0].put(test_model, )
+            test_e = e
 
         # save the model
         if e % args.save_freq == 0 and e > 0 and e != last_saved:
@@ -270,9 +278,3 @@ if __name__ == '__main__':
             print("Saving model at episode:{}".format(e))
             last_saved = e
 
-        # if e > 0 and e % args.test_every == 0 and tested_e != e:
-        #     temp = copy.deepcopy(global_ac).cpu()
-        #     shared_ac_state_dict = copy.deepcopy(temp.state_dict())
-        #     for _ in range(4):
-        #         test_q.put(shared_ac_state_dict,)
-        #     tested_e = e

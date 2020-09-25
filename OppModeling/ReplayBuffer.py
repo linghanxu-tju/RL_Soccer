@@ -102,13 +102,14 @@ class ReplayBufferShare:
 
 
 class ReplayBufferOppo:
-    def __init__(self, max_size, obs_dim, cpc=False, forget_percent=0.2, cpc_model=None, writer=None):
+    def __init__(self, max_size, obs_dim, cpc=False, forget_percent=0.2, cpc_model=None, writer=None,E=None):
         self.trajectories = list()
         self.latents = list()
         self.traj_len = list()
         self.meta = list()
         self.obs_dim = obs_dim
         self.size = 0
+        self.E = E
         self.writer = writer
         self.cpc = cpc
         self.cpc_model = cpc_model
