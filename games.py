@@ -311,7 +311,7 @@ class SoccerPLUS(Soccer):
         self.player_agent.set_ball(self.agent_keep_ball)
         self.player_opponent.set_ball(not self.agent_keep_ball)
         self.n_actions = len(self.action_map)
-        self.n_features = 8
+        self.n_features = 7
 
     def step(self, act_a, act_o):
         assert np.array_equal(self.player_agent.get_location(), self.agent) and np.array_equal(self.player_opponent.get_location(), self.opponent)
@@ -352,7 +352,7 @@ class SoccerPLUS(Soccer):
               self.opponent[1]/self.size,
               self.player_opponent.get_energy()/self.player_opponent.max_energy,
               int(self.agent_keep_ball),
-              self.counter/self.max_steps,
+              # self.counter/self.max_steps,
               ]
         s_ = np.array(s_,dtype=np.float)
         if done:
@@ -380,7 +380,7 @@ class SoccerPLUS(Soccer):
               self.opponent[1]/self.size,
               self.player_opponent.get_energy()/self.player_opponent.max_energy,
               int(self.agent_keep_ball),
-              self.counter/self.max_steps,
+              # self.counter/self.max_steps,
               ]
         s_ = np.array(s_,dtype=np.float)
         return s_
