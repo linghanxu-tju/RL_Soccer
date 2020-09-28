@@ -1,0 +1,9 @@
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.1 --opp3_per 0.9 --exp_name percent1-9
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.2 --opp3_per 0.8 --exp_name percent2-8
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.3 --opp3_per 0.7 --exp_name percent3-7
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.4 --opp3_per 0.6 --exp_name percent4-6
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.5 --opp3_per 0.5 --exp_name percent5-5
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.6 --opp3_per 0.4 --exp_name percent6-4
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.7 --opp3_per 0.3 --exp_name percent7-3
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.8 --opp3_per 0.2 --exp_name percent8-2
+/home/byron/.conda/envs/ftg/bin/python /home/byron/Repos/RL_Soccer/SAC_apex.py --cuda --n_process 6 --opp_list 1 3 --opp_freq 1 --opp_num 2 --opp1_per 0.9 --opp3_per 0.1 --exp_name percent9-1
