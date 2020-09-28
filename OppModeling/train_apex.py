@@ -11,7 +11,7 @@ from OppModeling.atari_wrappers import make_ftg_ram,make_ftg_ram_nonstation
 from OppModeling.SAC import MLPActorCritic
 
 
-def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
+def sac(rank, E, T, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
     torch.manual_seed(args.seed + rank)
     np.random.seed(args.seed + rank)
     # writer = GlobalSummaryWriter.getSummaryWriter()
@@ -22,14 +22,16 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
     # if args.exp_name == "test":
     #     env = gym.make("CartPole-v0")
     # elif args.non_station:
-    #     env = make_ftg_ram_nonstation(args.env, p2_list=args.list, total_episode=args.station_rounds,stable=args.stable)
+    #     env = make_ftg_ram_nonstation(args.env, p2_list=args.opp_list, total_episode=args.station_rounds,stable=args.stable)
     # else:
     #     env = make_ftg_ram(args.env, p2=args.p2)
     # obs_dim = env.observation_space.shape[0]
     # act_dim = env.action_space.n
     env = SoccerPLUS()
     opp_policy = Policy(game=env, player_num=False)
-    opps = [0] * 10 + [1] * 10 + [2] * 10 + [3] * 10
+    opps = []
+    for opp in args.opp_list:
+        opps += [opp] * args.opp_freq
     opp = opps[0]
     obs_dim = env.n_features
     act_dim = env.n_actions
@@ -52,7 +54,7 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
         print("Process {}\t Initially Loading FINISHED!!!".format(rank))
         del received_obj
     # Main loop: collect experience in env and update/log each epoch
-    while E.value() <= args.episode:
+    while T.value() < args.episode:
         with torch.no_grad():
             if E.value() <= args.update_after:
                 a = np.random.randint(act_dim)
@@ -82,6 +84,7 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
         # End of trajectory handling
         if d or (ep_len == args.max_ep_len) or discard:
             e = E.value()
+            t = T.value()
             send_data = (trajectory, meta)
             buffer_q.put(send_data,)
             local_e += 1
@@ -94,8 +97,8 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
             m_score = np.mean(scores[-100:])
             win_rate = np.mean(wins[-100:])
             print(
-                "Process\t{}\topponent:{},\t# of local episode :{},\tglobal episode {}\tround score: {},\tmean score : {:.1f},\twin rate:{},\tsteps: {}".format(
-                    rank, opp, local_e, e, ep_ret, m_score, win_rate, ep_len))
+                "Process\t{}\topponent:{},\t# of local episode :{},\tglobal episode {},\tglobal step {}\tround score: {},\tmean score : {:.1f},\twin rate:{},\tsteps: {}".format(
+                    rank, opp, local_e, e, t, ep_ret, m_score, win_rate, ep_len))
             writer.add_scalar("actor/round_score", ep_ret, local_e)
             writer.add_scalar("actor/mean_score", m_score.item(), local_e)
             writer.add_scalar("actor/win_rate", win_rate.item(), local_e)
@@ -112,4 +115,4 @@ def sac(rank, E, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
                 local_ac.load_state_dict(model_dict)
                 print("Process {}\tLOADED new mode at Global\t{},local\t{}!!!".format(rank, e, local_e))
                 del received_obj
-
+    print("Process {}\tActor Ended".format(rank))

@@ -48,19 +48,20 @@ def test_proc(global_ac, env, opp, args, device):
 
 def test_summary(p2, steps, m_score, win_rate, writer, args, e):
     print("\n" + "=" * 20 + "TEST SUMMARY" + "=" * 20)
-    summary = "opponent:\t{}\n# test episode:\t{}\n# total steps:\t{}\nmean score:\t{:.1f}\nwin_rate:\t{}".format(
-        p2, args.test_episode, steps, m_score, win_rate)
+    summary = "opponent:\t{}\n# test episode:\t{}\n# avg steps:\t{}\nmean score:\t{:.1f}\nwin_rate:\t{}".format(
+        p2, args.test_episode, steps/args.test_episode, m_score, win_rate)
     print(summary)
     print("=" * 20 + "TEST SUMMARY" + "=" * 20 + "\n")
     writer.add_scalar("Test/mean_score", m_score.item(), e)
     writer.add_scalar("Test/win_rate", win_rate.item(), e)
-    writer.add_scalar("Test/total_step", steps, e)
+    writer.add_scalar("Test/avg_step", steps/args.test_episode, e)
 
 
-def test_func(rank, E, args, test_q, device, tensorboard_dir, ):
+def test_func(rank, E, T, args, test_q, device, tensorboard_dir, ):
     torch.manual_seed(args.seed + rank)
     np.random.seed(args.seed + rank)
     print("set up Test process env")
+    opp = args.opp_list[rank]
     # non_station evaluation
     # if args.exp_name == "test":
     #     env = gym.make("CartPole-v0")
@@ -79,20 +80,16 @@ def test_func(rank, E, args, test_q, device, tensorboard_dir, ):
     local_ac = MLPActorCritic(obs_dim, act_dim, **ac_kwargs)
     env.close()
     del env
-    opps = [1, 3]
-    writers = []
-    for opp in opps:
-        temp_dir = os.path.join(tensorboard_dir, "test_{}".format(opp))
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
-        writer = SummaryWriter(log_dir=temp_dir)
-        writers.append(writer)
+    temp_dir = os.path.join(tensorboard_dir, "test_{}".format(opp))
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+    writer = SummaryWriter(log_dir=temp_dir)
     # Main loop: collect experience in env and update/log each epoch
-    while E.value() <= args.episode:
+    while True:
         received_obj = test_q.get()
-        e = E.value()
-        print("TEST Process {} loaded new mode at {} episode".format(rank, e))
-        model_dict = deepcopy(received_obj)
+        (test_model, t) = received_obj
+        print("TEST Process {} loaded new mode at {} step".format(rank, t))
+        model_dict = deepcopy(test_model)
         local_ac.load_state_dict(model_dict)
         del received_obj
         # if args.exp_name == "test":
@@ -102,10 +99,12 @@ def test_func(rank, E, args, test_q, device, tensorboard_dir, ):
         # else:
         #     env = make_ftg_ram(args.env, p2=p2)
         env = SoccerPLUS()
-        for index, opp in enumerate(opps):
-            print("TESTING process {} start to test, opp: {}".format(rank, opp))
-            m_score, win_rate, steps = test_proc(local_ac, env, opp, args, device)
-            test_summary(opp, steps, m_score, win_rate, writers[index], args, e)
-            print("TESTING process {} finished, opp: {}".format(rank, opp))
+        print("TESTING process {} start to test, opp: {}".format(rank, opp))
+        m_score, win_rate, steps = test_proc(local_ac, env, opp, args, device)
+        test_summary(opp, steps, m_score, win_rate, writer, args, t)
+        print("TESTING process {} finished, opp: {}".format(rank, opp))
         env.close()
         del env
+        if t >= args.episode:
+            break
+    print("Process {}\tTester Ended".format(rank))

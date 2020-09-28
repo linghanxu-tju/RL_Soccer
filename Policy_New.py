@@ -14,8 +14,10 @@ class Policy:
             self.offset_action[tuple(v)] = k
         self.my_goal = self.game.getGoalLocation(player_num)
         self.opp_goal = self.game.getGoalLocation(not player_num)
+        self.my_goal_up = self.my_goal[:3]
+        self.my_goal_down = self.my_goal[-3:]
         self.update_status()
-        self.policy_type = [self.policy0, self.policy1, self.policy2, self.policy3]
+        self.policy_type = [self.policy0, self.policy1, self.policy2, self.policy3, self.policy4, self.policy5]
 
     def moving(self, closer: bool, player_number: bool, locations: np.ndarray, actions: np.ndarray, weight=(1, 1, 1)):
         assert locations.ndim == 2 and actions.ndim == 2
@@ -166,7 +168,44 @@ class Policy:
         action = self.score_to_index(valid_actions, actions_score)
         return action
 
+    # policy 1: if not has ball, get ball. if has ball get to goal and keep away from opponent
+    def policy4(self, valid_actions):
+        if self.has_ball:
+            offset = self.win_the_game(valid_actions)
+            if offset is not None:
+                return self.offset_action[tuple(offset)]
+            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_up, actions=valid_actions,)
+            if self.game.getPlayerDistance() <= 4:
+                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions, weight=(0.5, 0.5, 0.5))
+        else:
+            actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
+            if self.game.getPlayerDistance() <= 2:
+                action = self.grab_ball(valid_actions)
+                if action is not None:
+                    return action
+        action = self.score_to_index(valid_actions, actions_score)
+        return action
+
+    def policy5(self, valid_actions):
+        if self.has_ball:
+            offset = self.win_the_game(valid_actions)
+            if offset is not None:
+                return self.offset_action[tuple(offset)]
+            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_down, actions=valid_actions,)
+            if self.game.getPlayerDistance() <= 4:
+                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions, weight=(0.5, 0.5, 0.5))
+        else:
+            actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
+            if self.game.getPlayerDistance() <= 2:
+                action = self.grab_ball(valid_actions)
+                if action is not None:
+                    return action
+        action = self.score_to_index(valid_actions, actions_score)
+        return action
+
     def get_actions(self, policy_num):
+        if isinstance(policy_num,str):
+            policy_num = int(policy_num)
         self.update_status()
         if policy_num == -1:
             return np.random.randint(len(self.action_map))
@@ -176,14 +215,14 @@ class Policy:
 
 if __name__ == "__main__":
     policy_types = list(range(5))
-    env = SoccerPLUS()
+    env = SoccerPLUS(visual=True)
     env.reset()
     my_policy = Policy(game=env, player_num=True)
     opp_policy = Policy(game=env, player_num=False)
     for rounds in range(1000):
         env.reset()
         while True:
-            s_, reward, done, _ = env.step(my_policy.get_actions(0), opp_policy.get_actions(0))
+            s_, reward, done, _ = env.step(my_policy.get_actions(5), opp_policy.get_actions(5))
             env.render()
             time.sleep(0.5)
             if done:

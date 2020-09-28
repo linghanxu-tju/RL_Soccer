@@ -32,15 +32,18 @@ if __name__ == '__main__':
     # non station agent settings
     parser.add_argument('--non_station', default=False, action='store_true')
     parser.add_argument('--stable', default=False, action='store_true')
-    parser.add_argument('--station_rounds', type=int, default=1000)
-    parser.add_argument('--list', nargs='+')
+    parser.add_argument('--opp_freq', type=int, default=1)
+    parser.add_argument('--opp_list', nargs='+')
+    parser.add_argument('--opp_num', type=int, default=2)
+    parser.add_argument('--opp1_per', type=float, default=0.5)
+    parser.add_argument('--opp3_per', type=float, default=0.5)
     # sac setting
-    parser.add_argument('--replay_size', type=int, default=5000)
-    parser.add_argument('--batch_size', type=int, default=1024)
+    parser.add_argument('--replay_size', type=int, default=50000)
+    parser.add_argument('--batch_size', type=int, default=2000)
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2, help="layers")
-    parser.add_argument('--episode', type=int, default=100000)
-    parser.add_argument('--update_after', type=int, default=500)
+    parser.add_argument('--episode', type=int, default=10000)
+    parser.add_argument('--update_after', type=int, default=1000)
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
     parser.add_argument('--min_alpha', type=float, default=0.05)
@@ -59,12 +62,13 @@ if __name__ == '__main__':
 
     # evaluation settings
     parser.add_argument('--test_episode', type=int, default=100)
-    parser.add_argument('--test_every', type=int, default=500)
+    parser.add_argument('--test_every', type=int, default=100)
+    # only for percentage experiment
     # Saving settings
     parser.add_argument('--save_freq', type=int, default=500)
-    parser.add_argument('--exp_name', type=str, default='ub_50000_1')
-    parser.add_argument('--save-dir', type=str, default="./experiments")
-    parser.add_argument('--traj_dir', type=str, default="./experiments")
+    parser.add_argument('--exp_name', type=str, default='percent5-5')
+    parser.add_argument('--save-dir', type=str, default="./experiments_per")
+    parser.add_argument('--traj_dir', type=str, default="./experiments_per")
     parser.add_argument('--model_para', type=str, default="sac.torch")
     parser.add_argument('--cpc_para', type=str, default="cpc.torch")
     parser.add_argument('--numpy_para', type=str, default="model.numpy")
@@ -95,7 +99,7 @@ if __name__ == '__main__':
     # if args.exp_name == "test":
     #     env = gym.make("CartPole-v0")
     # elif args.non_station:
-    #     env = make_ftg_ram_nonstation(args.env, p2_list=args.list, total_episode=args.station_rounds,stable=args.stable)
+    #     env = make_ftg_ram_nonstation(args.env, p2_list=args.opp_list, total_episode=args.opp_freq,stable=args.stable)
     # else:
     #     env = make_ftg_ram(args.env, p2=args.p2)
     env = SoccerPLUS()
@@ -124,8 +128,15 @@ if __name__ == '__main__':
     # training setup
     T = Counter()  # training steps
     E = Counter()  # training episode
-    replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
-                                     cpc_model=global_cpc, writer=writer,E=E)
+    # replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
+    #                                  cpc_model=global_cpc, writer=writer,E=E)
+
+    bufferopp1 = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
+                                     cpc_model=global_cpc, writer=writer, E=E)
+
+    bufferopp3 = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
+                                     cpc_model=global_cpc, writer=writer, E=E)
+
 
     if os.path.exists(os.path.join(args.save_dir, args.exp_name, args.model_para)):
         global_ac.load_state_dict(torch.load(os.path.join(args.save_dir, args.exp_name, args.model_para)))
@@ -142,7 +153,7 @@ if __name__ == '__main__':
     last_updated = 0
     last_deliver = 0
     last_saved = 0
-    test_e = 0
+    test_t = 0
     if args.cuda:
         global_ac.to(device)
         global_ac_targ.to(device)
@@ -153,17 +164,18 @@ if __name__ == '__main__':
         p.requires_grad = False
 
     buffer_q = mp.SimpleQueue()
-    model_q = [mp.SimpleQueue() for _ in range(args.n_process + 1)]  # 1 test model queue
+    model_q = [mp.SimpleQueue() for _ in range(args.n_process + args.opp_num)]  # 1 test model queue
+    evaluation_queue = list()
     processes = []
     # Process 0 for evaluation
-    for rank in range(args.n_process + 1):  # 1 test process
-        model_q[rank].put(shared_ac.state_dict())
+    for rank in range(args.n_process + args.opp_num):  # + n opp test process
         # Test during training
-        if rank == 0:
-            p = mp.Process(target=test_func, args=(rank, E, args, model_q[rank], torch.device("cpu"), tensorboard_dir))
+        if rank < args.opp_num:
+            p = mp.Process(target=test_func, args=(rank, E, T, args, model_q[rank], torch.device("cpu"), tensorboard_dir))
         else:
+            model_q[rank].put(shared_ac.state_dict())
             p = mp.Process(target=sac,
-                           args=(rank, E, args, model_q[rank], buffer_q, torch.device("cpu"), tensorboard_dir))
+                           args=(rank, E, T,args, model_q[rank], buffer_q, torch.device("cpu"), tensorboard_dir))
         p.start()
         # time.sleep(5)
         processes.append(p)
@@ -172,22 +184,29 @@ if __name__ == '__main__':
     alpha = max(global_ac.log_alpha.exp().item(), args.min_alpha) if args.dynamic_alpha else args.min_alpha
     # alpha = args.min_alpha
     e = E.value()
-    while E.value() <= args.episode:
+    while T.value() < args.episode:
         t = T.value()
 
-        if not buffer_q.empty():
+        # If do experiments, need to block the receive if now new data, otherwise will impact the result
+        # if not buffer_q.empty():
             # print("Going to read data from ACTOR...")
             # before_rece = time.time()
-            received_data = buffer_q.get()
-            # wait_time = time.time() - before_rece
-            # print("waited {}s Reading data from ACTOR!!!".format(wait_time))
-            (trajectory, meta) = copy.deepcopy(received_data)
-            del received_data
-            if args.cpc and len(trajectory) <= args.timestep:
-                continue
-            replay_buffer.store(trajectory, meta=meta)
-            writer.add_scalar("learner/buffer_size", replay_buffer.size, e)
-            E.increment()
+        received_data = buffer_q.get()
+        # wait_time = time.time() - before_rece
+        # print("waited {}s Reading data from ACTOR!!!".format(wait_time))
+        (trajectory, meta) = copy.deepcopy(received_data)
+        del received_data
+        if args.cpc and len(trajectory) <= args.timestep:
+            continue
+        if meta[0][0] == "1":
+            bufferopp1.store(trajectory, meta=meta)
+        elif meta[0][0] == "3":
+            bufferopp3.store(trajectory, meta=meta)
+        # replay_buffer.store(trajectory, meta=meta)
+        # writer.add_scalar("learner/buffer_size", replay_buffer.size, e)
+        writer.add_scalar("learner/buffer1_size", bufferopp1.size, e)
+        writer.add_scalar("learner/buffer2_size", bufferopp3.size, e)
+        E.increment()
         e = E.value()
 
         # SAC Update handling
@@ -196,7 +215,10 @@ if __name__ == '__main__':
             for _ in range(args.update_every):
                 T.increment()
                 t = T.value()
-                batch = replay_buffer.sample_trans(args.batch_size, device=device)
+                batch1 = bufferopp1.sample_trans(int(args.batch_size*args.opp1_per), device=device)
+                batch3 = bufferopp1.sample_trans(int(args.batch_size*args.opp3_per), device=device)
+                batch = {k: torch.cat((batch1[k], batch3[k]), dim=0) for k, v in batch1.items()}
+                # batch = replay_buffer.sample_trans(args.batch_size, device=device)
                 # First run one gradient descent step for Q1 and Q2
                 q1_optimizer.zero_grad()
                 q2_optimizer.zero_grad()
@@ -233,7 +255,7 @@ if __name__ == '__main__':
                 writer.add_scalar("learner/entropy", entropy.detach().mean().item(), t)
 
         # CPC update handing
-        if args.cpc and e > args.cpc_batch * 2 and e % args.cpc_update_freq == 0:
+        if args.cpc and e > args.cpc_batch * 2 and e % args.cpc_update_freq  == 0:
             for _ in range(args.cpc_update_freq):
                 data, indexes, min_len = replay_buffer.sample_traj(args.cpc_batch)
                 cpc_optimizer.zero_grad()
@@ -254,22 +276,28 @@ if __name__ == '__main__':
         #     last_updated = e
 
         # deliver the model
-        if e % (args.n_process * 2) == 0 and e > args.save_freq and e != last_deliver:
+        if e % (args.n_process * 2) == 0 and e >= args.update_after and e != last_deliver:
             temp = copy.deepcopy(global_ac).cpu()
             shared_ac_state_dict = copy.deepcopy(temp.state_dict())
-            for i in range(1, args.n_process+1):  # 0 is test model queue
+            for i in range(args.opp_num, args.n_process + args.opp_num):  # n is test model queue
                 model_q[i].put(shared_ac_state_dict, )
             last_deliver = e
 
         # evaluation model
-        if e > 0 and e % args.test_every == 0 and test_e != e:
+        if t > 0 and t % args.test_every == 0 and e >= args.update_after and  test_t != t:
             temp = copy.deepcopy(global_ac).cpu()
             test_model = copy.deepcopy(temp.state_dict())
-            model_q[0].put(test_model, )
-            test_e = e
+            send_obj = (test_model, t)
+            # in case the large model state dict will make the queue full to stuck the training process
+            evaluation_queue.append(send_obj)
+            if any([model_q[i].empty() for i in range(args.opp_num)]):
+                temp = evaluation_queue.pop(0)
+                for i in range(args.opp_num):
+                    model_q[i].put(temp, )
+            test_t = t
 
         # save the model
-        if e % args.save_freq == 0 and e > 0 and e != last_saved:
+        if e % args.save_freq == 0 and e >= args.update_after and e != last_saved:
             torch.save(global_ac.state_dict(), os.path.join(experiment_dir, args.model_para))
             if args.cpc:
                 torch.save(global_cpc.state_dict(), os.path.join(experiment_dir, args.cpc_para))
@@ -277,4 +305,14 @@ if __name__ == '__main__':
             # torch.save((e, t, list(scores), list(wins)), os.path.join(args.save_dir, args.exp_name, "model_data_{}".format(e)))
             print("Saving model at episode:{}".format(e))
             last_saved = e
-
+    print("after the training loop, waiting for the end of evaluation")
+    # consume all the queue to make sure all processes can be closed correctly
+    while not buffer_q.empty():
+        buffer_q.get()
+    while len(evaluation_queue) > 0:
+        if any([model_q[i].empty() for i in range(args.opp_num)]):
+            temp = evaluation_queue.pop(0)
+            for i in range(args.opp_num):
+                model_q[i].put(temp, )
+    for p in processes:
+        p.join()
