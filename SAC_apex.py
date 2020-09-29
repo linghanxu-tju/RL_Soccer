@@ -39,10 +39,10 @@ if __name__ == '__main__':
     parser.add_argument('--opp3_per', type=float, default=0.5)
     # sac setting
     parser.add_argument('--replay_size', type=int, default=50000)
-    parser.add_argument('--batch_size', type=int, default=2000)
+    parser.add_argument('--batch_size', type=int, default=5000)
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2, help="layers")
-    parser.add_argument('--episode', type=int, default=10000)
+    parser.add_argument('--episode', type=int, default=100000)
     parser.add_argument('--update_after', type=int, default=1000)
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
@@ -67,7 +67,7 @@ if __name__ == '__main__':
     # Saving settings
     parser.add_argument('--save_freq', type=int, default=500)
     parser.add_argument('--exp_name', type=str, default='percent5-5')
-    parser.add_argument('--save-dir', type=str, default="./experiments_per")
+    parser.add_argument('--save-dir', type=str, default="./exp_po45")
     parser.add_argument('--traj_dir', type=str, default="./experiments_per")
     parser.add_argument('--model_para', type=str, default="sac.torch")
     parser.add_argument('--cpc_para', type=str, default="cpc.torch")
@@ -198,9 +198,9 @@ if __name__ == '__main__':
         del received_data
         if args.cpc and len(trajectory) <= args.timestep:
             continue
-        if meta[0][0] == "1":
+        if meta[0][0] == "4":
             bufferopp1.store(trajectory, meta=meta)
-        elif meta[0][0] == "3":
+        elif meta[0][0] == "5":
             bufferopp3.store(trajectory, meta=meta)
         # replay_buffer.store(trajectory, meta=meta)
         # writer.add_scalar("learner/buffer_size", replay_buffer.size, e)

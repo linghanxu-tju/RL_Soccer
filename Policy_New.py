@@ -174,9 +174,7 @@ class Policy:
             offset = self.win_the_game(valid_actions)
             if offset is not None:
                 return self.offset_action[tuple(offset)]
-            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_up, actions=valid_actions,)
-            if self.game.getPlayerDistance() <= 4:
-                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions, weight=(0.5, 0.5, 0.5))
+            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_up, actions=valid_actions)
         else:
             actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
             if self.game.getPlayerDistance() <= 2:
@@ -191,9 +189,7 @@ class Policy:
             offset = self.win_the_game(valid_actions)
             if offset is not None:
                 return self.offset_action[tuple(offset)]
-            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_down, actions=valid_actions,)
-            if self.game.getPlayerDistance() <= 4:
-                actions_score += self.moving(closer=False, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions, weight=(0.5, 0.5, 0.5))
+            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_down, actions=valid_actions)
         else:
             actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
             if self.game.getPlayerDistance() <= 2:
