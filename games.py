@@ -2,9 +2,9 @@
 import numpy as np
 import imageio
 from gym import spaces
-import tkinter as tk
-from PIL import Image, ImageTk
-import matplotlib.pyplot  as plt
+# import tkinter as tk
+# from PIL import Image, ImageTk
+# import matplotlib.pyplot  as plt
 import time
 
 CELL, BLOCK, AGENT_GOAL, OPPONENT_GOAL, AGENT, OPPONENT = range(6)
@@ -69,7 +69,28 @@ class Player:
         self.keeping_ball = not self.keeping_ball
 
 
-class Soccer(tk.Tk if VISUAL else object):
+# class Soccer(tk.Tk if VISUAL else object):
+class Soccer(object):
+    # playground = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,]
+    # 13 x 13
     playground = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
@@ -87,6 +108,32 @@ class Soccer(tk.Tk if VISUAL else object):
                   3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ]
+    # playground = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,]
+    # playground = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               3, 3, 0, 0, 0, 0, 0, 0, 0, 2, 2,
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    #               1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,]
     action_map = {
         UP: np.array([-1, 0]),
         RIGHT: np.array([0, 1]),
@@ -208,30 +255,30 @@ class Soccer(tk.Tk if VISUAL else object):
         return m.reshape(len(self.playground))
 
     # render img
-    def visualize(self):
-        self.canvas = tk.Canvas(self, bg='white',
-                                height=self.size * UNIT,
-                                width=self.size * UNIT)
-        # create grids
-        for c in range(0, self.size * UNIT, UNIT):
-            x0, y0, x1, y1 = c, 0, c, self.size * UNIT
-            self.canvas.create_line(x0, y0, x1, y1)
-        for r in range(0, self.size * UNIT, UNIT):
-            x0, y0, x1, y1 = 0, r, self.size * UNIT, r
-            self.canvas.create_line(x0, y0, x1, y1)
+    # def visualize(self):
+    #     self.canvas = tk.Canvas(self, bg='white',
+    #                             height=self.size * UNIT,
+    #                             width=self.size * UNIT)
+    #     # create grids
+    #     for c in range(0, self.size * UNIT, UNIT):
+    #         x0, y0, x1, y1 = c, 0, c, self.size * UNIT
+    #         self.canvas.create_line(x0, y0, x1, y1)
+    #     for r in range(0, self.size * UNIT, UNIT):
+    #         x0, y0, x1, y1 = 0, r, self.size * UNIT, r
+    #         self.canvas.create_line(x0, y0, x1, y1)
 
-        m = np.copy(self.grids)
-        m[tuple(self.agent)] = 4
-        m[tuple(self.opponent)] = 5
-        # print(m)
-        for j in range(self.size):
-            for i in range(self.size):
-                if m[j, i] == 1:
-                    self.canvas.create_rectangle(i * UNIT, j * UNIT, (i + 1) * UNIT, (j + 1) * UNIT, fill='black')
-                elif m[j, i] == 2 or m[j, i] == 3:
-                    self.canvas.create_rectangle(i * UNIT, j * UNIT, (i + 1) * UNIT, (j + 1) * UNIT, fill='white')
-                elif m[j, i] == 0 or m[j, i] == 4 or m[j, i] == 5:
-                    self.canvas.create_rectangle(i * UNIT, j * UNIT, (i + 1) * UNIT, (j + 1) * UNIT, fill='green')
+    #     m = np.copy(self.grids)
+    #     m[tuple(self.agent)] = 4
+    #     m[tuple(self.opponent)] = 5
+    #     # print(m)
+    #     for j in range(self.size):
+    #         for i in range(self.size):
+    #             if m[j, i] == 1:
+    #                 self.canvas.create_rectangle(i * UNIT, j * UNIT, (i + 1) * UNIT, (j + 1) * UNIT, fill='black')
+    #             elif m[j, i] == 2 or m[j, i] == 3:
+    #                 self.canvas.create_rectangle(i * UNIT, j * UNIT, (i + 1) * UNIT, (j + 1) * UNIT, fill='white')
+    #             elif m[j, i] == 0 or m[j, i] == 4 or m[j, i] == 5:
+    #                 self.canvas.create_rectangle(i * UNIT, j * UNIT, (i + 1) * UNIT, (j + 1) * UNIT, fill='green')
 
     def close(self):
         if self.visual:

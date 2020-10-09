@@ -10,8 +10,15 @@ from Policy_New import Policy
 from OppModeling.atari_wrappers import make_ftg_ram,make_ftg_ram_nonstation
 from OppModeling.SAC import MLPActorCritic
 
+from OppModeling.logger import get_logger
+filename = 'exp_po45/0.5_0.5/exp.log'
+if not os.path.isfile(filename):
+    f = open(filename,mode = 'w')
+    f.close()
+logger = get_logger(filename)
 
 def sac(rank, E, T, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
+
     torch.manual_seed(args.seed + rank)
     np.random.seed(args.seed + rank)
     # writer = GlobalSummaryWriter.getSummaryWriter()
@@ -99,6 +106,8 @@ def sac(rank, E, T, args, model_q, buffer_q, device=None, tensorboard_dir=None,)
             print(
                 "Process\t{}\topponent:{},\t# of local episode :{},\tglobal episode {},\tglobal step {}\tround score: {},\tmean score : {:.1f},\twin rate:{},\tsteps: {}".format(
                     rank, opp, local_e, e, t, ep_ret, m_score, win_rate, ep_len))
+            # logger.info("Process\t{}\topponent:{},\t# of local episode :{},\tglobal episode {},\tglobal step {}\tround score: {},\tmean score : {:.1f},\twin rate:{},\tsteps: {}".format(
+            #          rank, opp, local_e, e, t, ep_ret, m_score, win_rate, ep_len))
             writer.add_scalar("actor/round_score", ep_ret, local_e)
             writer.add_scalar("actor/mean_score", m_score.item(), local_e)
             writer.add_scalar("actor/win_rate", win_rate.item(), local_e)

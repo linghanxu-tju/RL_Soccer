@@ -2,7 +2,7 @@ import numpy as np
 import os
 import cv2
 import gym
-import gym_fightingice
+# import gym_fightingice
 import signal
 from collections import deque
 from gym import spaces

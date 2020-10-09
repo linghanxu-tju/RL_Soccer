@@ -187,6 +187,9 @@ class ReplayBufferOppo:
         return distance_matrix
 
     def sample_trans(self, batch_size, device=None):
+        if batch_size == 0:
+            return dict(obs=torch.as_tensor([], dtype=torch.float32).to(device), obs2=torch.as_tensor([], dtype=torch.float32).to(device), 
+                act=torch.as_tensor([], dtype=torch.float32).to(device), rew=torch.as_tensor([], dtype=torch.float32).to(device), done=torch.as_tensor([], dtype=torch.float32).to(device))
         indexes = np.arange(len(self.trajectories))
         prob = np.array(self.traj_len) / sum(self.traj_len)
         sampled_trans = []

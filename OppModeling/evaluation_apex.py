@@ -9,6 +9,15 @@ from torch.utils.tensorboard import SummaryWriter
 from OppModeling.atari_wrappers import make_ftg_ram, make_ftg_ram_nonstation
 from OppModeling.SAC import MLPActorCritic
 
+from OppModeling.logger import get_logger
+
+filename = 'exp_po45/0.5_0.5/exp.log'
+if not os.path.isfile(filename):
+    f = open(filename,mode = 'w')
+    f.close()
+logger = get_logger(filename)
+
+
 
 def test_proc(global_ac, env, opp, args, device):
     scores, wins, m_score, win_rate = [], [], 0, 0
@@ -34,7 +43,11 @@ def test_proc(global_ac, env, opp, args, device):
         if d or (ep_len == args.max_ep_len) or discard:
             # logger.store(EpRet=ep_ret, EpLen=ep_len)
             local_e += 1
-            if info.get('win', False):
+            # if info.get('win', False):
+            #     wins.append(1)
+            # else:
+            #     wins.append(0)
+            if r == 5:
                 wins.append(1)
             else:
                 wins.append(0)
@@ -47,10 +60,14 @@ def test_proc(global_ac, env, opp, args, device):
 
 
 def test_summary(p2, steps, m_score, win_rate, writer, args, e):
+
     print("\n" + "=" * 20 + "TEST SUMMARY" + "=" * 20)
-    summary = "opponent:\t{}\n# test episode:\t{}\n# avg steps:\t{}\nmean score:\t{:.1f}\nwin_rate:\t{}".format(
-        p2, args.test_episode, steps/args.test_episode, m_score, win_rate)
-    print(summary)
+    # summary = "opponent:\t{}\n# test episode:\t{}\n# avg steps:\t{}\nmean score:\t{:.1f}\nwin_rate:\t{}".format(
+    #     p2, args.test_episode, steps/args.test_episode, m_score, win_rate)
+    # print(summary)
+    logger.info(e)
+    logger.info("opponent:\t{}\n# test episode:\t{}\n# avg steps:\t{}\nmean score:\t{:.1f}\nwin_rate:\t{}".format(
+        p2, args.test_episode, steps/args.test_episode, m_score, win_rate))
     print("=" * 20 + "TEST SUMMARY" + "=" * 20 + "\n")
     writer.add_scalar("Test/mean_score", m_score.item(), e)
     writer.add_scalar("Test/win_rate", win_rate.item(), e)
