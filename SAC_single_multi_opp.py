@@ -102,12 +102,19 @@ class ReplayBuffer:
         self.size = min(self.size + 1, self.max_size)
 
     def sample_batch(self, batch_size=32, device=None):
-        idxs = np.random.randint(0, self.size, size=batch_size)
-        batch = dict(obs=self.obs_buf[idxs],
-                     obs2=self.obs2_buf[idxs],
-                     act=self.act_buf[idxs],
-                     rew=self.rew_buf[idxs],
-                     done=self.done_buf[idxs])
+        if batch_size == 0:
+            batch = dict(obs=[],
+                         obs2=[],
+                         act=[],
+                         rew=[],
+                         done=[])
+        else:
+            idxs = np.random.randint(0, self.size, size=batch_size)
+            batch = dict(obs=self.obs_buf[idxs],
+                         obs2=self.obs2_buf[idxs],
+                         act=self.act_buf[idxs],
+                         rew=self.rew_buf[idxs],
+                         done=self.done_buf[idxs])
         return {k: torch.as_tensor(v, dtype=torch.float32).to(device) for k, v in batch.items()}
 
 
@@ -121,7 +128,9 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     np.random.seed(seed)
 
     env = env_fn()
+    test_env = SoccerPLUS(visual=False)
     opp_policy = Policy(game=env, player_num=False)
+    test_opp_policy = Policy(game=test_env, player_num=False)
     obs_dim = env.n_features
     act_dim = env.n_actions #env.n_actions
 
@@ -258,10 +267,10 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             win = 0
             total_ret = 0
             for j in range(num_test_episodes):
-                o, d, ep_ret, ep_len = env.reset(), False, 0, 0
+                o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
                 while not (d or (ep_len == max_ep_len)):
                     # Take deterministic actions at test time
-                    o2, r, d, _ = env.step(get_action(o, True), opp_policy.get_actions(opp))
+                    o2, r, d, _ = test_env.step(get_action(o, True), test_opp_policy.get_actions(opp))
                     # test_env.render()
                     o = o2
                     ep_ret += r
@@ -285,7 +294,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     opps = []
     for opp in args.opp_list:
         opps += [opp] * args.opp_freq
-    opp = opps[0]
+    opp = opps[1]
 
     # Main loop: collect experience in env and update/log each epoch
     for t in range(total_steps):
@@ -317,6 +326,8 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             bufferopp1.store(o, a, r, o2, d)
         elif opp == '5':
             bufferopp3.store(o, a, r, o2, d)
+        writer.add_scalar("learner/buffer1_size", bufferopp1.size, t)
+        writer.add_scalar("learner/buffer2_size", bufferopp3.size, t)
         # replay_buffer.store(o, a, r, o2, d)
 
         # Super critical, easy to overlook step: make sure to update
