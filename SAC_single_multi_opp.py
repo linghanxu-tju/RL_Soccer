@@ -262,7 +262,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         action = sample_a if not greedy else max_a
         return action.item()
 
-    def test_agent(epoch, opp, writer):
+    def test_agent(epoch, t_opp, writer):
         with torch.no_grad():
             win = 0
             total_ret = 0
@@ -270,7 +270,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
                 o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
                 while not (d or (ep_len == max_ep_len)):
                     # Take deterministic actions at test time
-                    o2, r, d, _ = test_env.step(get_action(o, True), test_opp_policy.get_actions(opp))
+                    o2, r, d, _ = test_env.step(get_action(o, True), test_opp_policy.get_actions(t_opp))
                     # test_env.render()
                     o = o2
                     ep_ret += r
@@ -281,7 +281,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             mean_score = total_ret / num_test_episodes
             win_rate = win / num_test_episodes
             logger.info("opponent:\t{}\ntest epoch:\t{}\nmean score:\t{:.1f}\nwin_rate:\t{}".format(
-    opp, epoch, mean_score, win_rate))
+    t_opp, epoch, mean_score, win_rate))
             writer.add_scalar("test/mean_score", mean_score, epoch)
             writer.add_scalar("test/win_rate", win_rate, epoch)
 
@@ -294,7 +294,8 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     opps = []
     for opp in args.opp_list:
         opps += [opp] * args.opp_freq
-    opp = opps[1]
+    opp = opps[0]
+    episode = 0
 
     # Main loop: collect experience in env and update/log each epoch
     for t in range(total_steps):
@@ -338,12 +339,13 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         if d or (ep_len == max_ep_len) or discard:
             scores.append(ep_ret)
             # print("total_step {},round len:{}, round score: {}, 100 mean score: {}， 10 mean Score: {}".format(t,ep_len, ep_ret, np.mean(scores[-100:]),np.mean(scores[-10:])))
-            logger.info("total_step {}, opp:{}, round len:{}, round score: {}, 100 mean score: {}， 10 mean Score: {}".format(t, opp, ep_len, ep_ret, np.mean(scores[-100:]),np.mean(scores[-10:])))
+            logger.info("total_step {}, episode: {}, opp:{}, round len:{}, round score: {}, 100 mean score: {}， 10 mean Score: {}".format(t, episode, opp, ep_len, ep_ret, np.mean(scores[-100:]),np.mean(scores[-10:])))
             writer.add_scalar("metrics/round_score", ep_ret, t)
             writer.add_scalar("metrics/round_step", ep_len, t)
             writer.add_scalar("metrics/alpha", alpha, t)
             o, ep_ret, ep_len = env.reset(), 0, 0
-            opp = opps[t % len(opps)]
+            episode += 1
+            opp = opps[episode % len(opps)]
             discard = False
 
 
@@ -366,14 +368,14 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         #     if epoch % save_freq == 0 and t > 0:
         #         torch.save(ac.state_dict(), os.path.join(save_dir, str(epoch)+"_model"))
         #         print("Saving model at episode:{}".format(t))
-        if t >= update_after and (t+1) % save_freq == 0:
+        if t >= update_after and t % save_freq == 0:
 
             # Test the performance of the deterministic version of the agent.
-            for opp in args.opp_list:
-                if opp == '4':
-                    test_agent(t+1, opp, writer_1)
-                elif opp == '5':
-                    test_agent(t+1, opp, writer_3)
+            for test_opp in args.opp_list:
+                if test_opp == '4':
+                    test_agent(t, test_opp, writer_1)
+                elif test_opp == '5':
+                    test_agent(t, test_opp, writer_3)
             #
             # # Log info about epoch
             # logger.log_tabular('Epoch', epoch)
@@ -401,12 +403,13 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.95)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--epochs', type=int, default=300)
+    parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--replay_size', type=int, default=1000000)
     parser.add_argument('--batch_size', type=int, default=5000)
     parser.add_argument('--alpha', type=float, default=0.05)
     parser.add_argument('--exp_name', type=str, default='sac')
     parser.add_argument('--save_dir', type=str, default='OpenAI/SAC/')
+    parser.add_argument('--test_save_dir', type=str, default='test')
 
     parser.add_argument('--opp_list', nargs='+')
     parser.add_argument('--opp_num', type=int, default=2)
@@ -420,8 +423,8 @@ if __name__ == '__main__':
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     tensorboard_dir = os.path.join(save_dir, "runs")
-    tensorboard_dir_1 = os.path.join(tensorboard_dir, "test", "test_4")
-    tensorboard_dir_3 = os.path.join(tensorboard_dir, "test", "test_5")
+    tensorboard_dir_1 = os.path.join(args.test_save_dir, "test_4_" + str(args.opp1_per) + '_' + str(args.opp3_per))
+    tensorboard_dir_3 = os.path.join(args.test_save_dir, "test_5_" + str(args.opp1_per) + '_' + str(args.opp3_per))
     if not os.path.exists(tensorboard_dir):
         os.makedirs(tensorboard_dir)
     writer = SummaryWriter(log_dir=tensorboard_dir)
