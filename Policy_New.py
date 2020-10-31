@@ -43,13 +43,24 @@ class Policy:
         current_location = self.me
         for i in range(len(self.action_map)):
             if hasattr(self.game, 'player_agent'):
-                if self.game.player_agent.energy_enough(i):
-                    if self.game.getPlayerDistance() <= 4:
-                        all_actions.append(self.action_map[i])
-                    elif self.game.player_agent.energy_cost[i] > 0:
-                        all_actions.append(self.action_map[i])
-            else:
-                all_actions.append(self.action_map[i])
+                if hasattr(self.game, 'player_agent'):
+                    me = self.game.player_agent if self.player_num else self.game.player_opponent 
+                    if me.energy_enough(i):
+                        if self.game.getPlayerDistance() <= 4:
+                            all_actions.append(self.action_map[i])
+                        elif me.energy_cost[i] > 0:
+                            all_actions.append(self.action_map[i])
+                else:
+                    all_actions.append(self.action_map[i])
+            #     # if self.game.player_agent.energy_enough(i):
+            #     if self.game.player_opponent.energy_enough(i):
+            #         if self.game.getPlayerDistance() <= 4:
+            #             all_actions.append(self.action_map[i])
+            #         # elif self.game.player_agent.energy_cost[i] > 0:
+            #         elif self.game.player_opponent.energy_cost[i] > 0:
+            #             all_actions.append(self.action_map[i])
+            # else:
+            #     all_actions.append(self.action_map[i])
         all_actions = np.array(all_actions)
         new_locations = current_location + all_actions
         valid_actions = self.game.validLocationAll(new_locations)
