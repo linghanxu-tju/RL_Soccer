@@ -10,12 +10,19 @@ from Policy_New import Policy
 from OppModeling.atari_wrappers import make_ftg_ram,make_ftg_ram_nonstation
 from OppModeling.SAC import MLPActorCritic
 
-from OppModeling.logger import get_logger
-filename = 'exp_po45/0.5_0.5/exp.log'
-if not os.path.isfile(filename):
-    f = open(filename,mode = 'w')
-    f.close()
-logger = get_logger(filename)
+# from OppModeling.logger import get_logger
+# filename = 'exp_po45/0.5_0.5/exp.log'
+# if not os.path.isfile(filename):
+#     f = open(filename,mode = 'w')
+#     f.close()
+# logger = get_logger(filename)
+
+def get_opp_policy(p):
+    p_sample = np.random.rand()
+    if p_sample < p:
+        return 4
+    else:
+        return 5
 
 def sac(rank, E, T, args, model_q, buffer_q, device=None, tensorboard_dir=None,):
 
@@ -114,7 +121,8 @@ def sac(rank, E, T, args, model_q, buffer_q, device=None, tensorboard_dir=None,)
             writer.add_scalar("actor/round_step", ep_len, local_e)
             writer.add_scalar("actor/learner_actor_speed", e, local_e)
             o, ep_ret, ep_len = env.reset(), 0, 0
-            opp = opps[local_e % len(opps)]
+            # opp = opps[local_e % len(opps)]
+            opp = get_opp_policy(args.p)
             discard = False
             trajectory, meta = list(), list()
             if not model_q.empty():

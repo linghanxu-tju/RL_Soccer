@@ -132,22 +132,22 @@ class ReplayBufferOppo:
             self.size -= self.traj_len.pop(0)
         else:
 
-            self.trajectories.pop(0)
-            self.meta.pop(0)
-            self.latents.pop(0)
-            self.size -= self.traj_len.pop(0)
-            # self.create_latents()
-            # distance_matrix = self.latent_distance()
-            # closest_k = int(len(self.latents) * self.forget_percent)
-            # ind =np.argpartition(distance_matrix, closest_k, axis=1)[:,:closest_k]
-            # kmean_dis = distance_matrix.take(ind).mean(axis=1)
-            # remove_index = np.argpartition(kmean_dis, closest_k, axis=-1)[:closest_k]
-            # remove_index = np.sort(remove_index)[::-1]
-            # for index in remove_index:
-            #     del self.trajectories[index]
-            #     del self.latents[index]
-            #     del self.meta[index]
-            #     self.size -= self.traj_len.pop(index)
+            # self.trajectories.pop(0)
+            # self.meta.pop(0)
+            # self.latents.pop(0)
+            # self.size -= self.traj_len.pop(0)
+            self.create_latents(self.E.value())
+            distance_matrix = self.latent_distance()
+            closest_k = int(len(self.latents) * self.forget_percent)
+            ind =np.argpartition(distance_matrix, closest_k, axis=1)[:,:closest_k]
+            kmean_dis = distance_matrix.take(ind).mean(axis=1)
+            remove_index = np.argpartition(kmean_dis, closest_k, axis=-1)[:closest_k]
+            remove_index = np.sort(remove_index)[::-1]
+            for index in remove_index:
+                del self.trajectories[index]
+                del self.latents[index]
+                del self.meta[index]
+                self.size -= self.traj_len.pop(index)
 
     def create_latents(self, e):
         assert self.cpc_model is not None

@@ -37,12 +37,13 @@ if __name__ == '__main__':
     parser.add_argument('--opp_num', type=int, default=2)
     parser.add_argument('--opp1_per', type=float, default=0.5)
     parser.add_argument('--opp3_per', type=float, default=0.5)
+    parser.add_argument('--p', type=float, default=0.5)
     # sac setting
-    parser.add_argument('--replay_size', type=int, default=50000)
-    parser.add_argument('--batch_size', type=int, default=5000)
+    parser.add_argument('--replay_size', type=int, default=20000)
+    parser.add_argument('--batch_size', type=int, default=256)
     parser.add_argument('--hid', type=int, default=256)
     parser.add_argument('--l', type=int, default=2, help="layers")
-    parser.add_argument('--episode', type=int, default=100000)
+    parser.add_argument('--episode', type=int, default=20000)
     parser.add_argument('--update_after', type=int, default=1000)
     parser.add_argument('--update_every', type=int, default=1)
     parser.add_argument('--max_ep_len', type=int, default=1000)
@@ -66,7 +67,7 @@ if __name__ == '__main__':
     # only for percentage experiment
     # Saving settings
     parser.add_argument('--save_freq', type=int, default=500)
-    parser.add_argument('--exp_name', type=str, default='percent5-5')
+    parser.add_argument('--exp_name', type=str, default='percent99-1')
     parser.add_argument('--save-dir', type=str, default="./exp_po45")
     parser.add_argument('--traj_dir', type=str, default="./experiments_per")
     parser.add_argument('--model_para', type=str, default="sac.torch")
@@ -128,14 +129,14 @@ if __name__ == '__main__':
     # training setup
     T = Counter()  # training steps
     E = Counter()  # training episode
-    # replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
-    #                                  cpc_model=global_cpc, writer=writer,E=E)
+    replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
+                                     cpc_model=global_cpc, writer=writer,E=E)
 
-    bufferopp1 = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
-                                     cpc_model=global_cpc, writer=writer, E=E)
+    # bufferopp1 = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
+    #                                  cpc_model=global_cpc, writer=writer, E=E)
 
-    bufferopp3 = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
-                                     cpc_model=global_cpc, writer=writer, E=E)
+    # bufferopp3 = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
+    #                                  cpc_model=global_cpc, writer=writer, E=E)
 
 
     if os.path.exists(os.path.join(args.save_dir, args.exp_name, args.model_para)):
@@ -198,14 +199,14 @@ if __name__ == '__main__':
         del received_data
         if args.cpc and len(trajectory) <= args.timestep:
             continue
-        if meta[0][0] == "4":
-            bufferopp1.store(trajectory, meta=meta)
-        elif meta[0][0] == "5":
-            bufferopp3.store(trajectory, meta=meta)
-        # replay_buffer.store(trajectory, meta=meta)
-        # writer.add_scalar("learner/buffer_size", replay_buffer.size, e)
-        writer.add_scalar("learner/buffer1_size", bufferopp1.size, e)
-        writer.add_scalar("learner/buffer2_size", bufferopp3.size, e)
+        # if meta[0][0] == "4":
+        #     bufferopp1.store(trajectory, meta=meta)
+        # elif meta[0][0] == "5":
+        #     bufferopp3.store(trajectory, meta=meta)
+        replay_buffer.store(trajectory, meta=meta)
+        writer.add_scalar("learner/buffer_size", replay_buffer.size, e)
+        # writer.add_scalar("learner/buffer1_size", bufferopp1.size, e)
+        # writer.add_scalar("learner/buffer2_size", bufferopp3.size, e)
         E.increment()
         e = E.value()
 
@@ -215,10 +216,10 @@ if __name__ == '__main__':
             for _ in range(args.update_every):
                 T.increment()
                 t = T.value()
-                batch1 = bufferopp1.sample_trans(int(args.batch_size*args.opp1_per), device=device)
-                batch3 = bufferopp1.sample_trans(int(args.batch_size*args.opp3_per), device=device)
-                batch = {k: torch.cat((batch1[k], batch3[k]), dim=0) for k, v in batch1.items()}
-                # batch = replay_buffer.sample_trans(args.batch_size, device=device)
+                # batch1 = bufferopp1.sample_trans(int(args.batch_size*args.opp1_per), device=device)
+                # batch3 = bufferopp1.sample_trans(int(args.batch_size*args.opp3_per), device=device)
+                # batch = {k: torch.cat((batch1[k], batch3[k]), dim=0) for k, v in batch1.items()}
+                batch = replay_buffer.sample_trans(args.batch_size, device=device)
                 # First run one gradient descent step for Q1 and Q2
                 q1_optimizer.zero_grad()
                 q2_optimizer.zero_grad()
