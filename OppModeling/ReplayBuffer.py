@@ -4,7 +4,9 @@ import numpy as np
 import multiprocessing as mp
 from OppModeling.utils import combined_shape
 from OppModeling.DTW import accelerated_dtw
+from OppModeling.Fast_DTW import fastdtw
 
+import time 
 
 class ReplayBuffer:
     """
@@ -115,6 +117,7 @@ class ReplayBufferOppo:
         self.cpc_model = cpc_model
         self.forget_percent = forget_percent
         self.max_size = max_size
+        self.save_e = 0
 
     def store(self, trajectory, latents=None, meta=None):
         while self.size + len(trajectory) >= self.max_size:
@@ -166,15 +169,19 @@ class ReplayBufferOppo:
         for meta_traj in self.meta:
             for meta in meta_traj:
                 flat_meta.append(meta)
-        self.writer.add_embedding(mat=np.array(all_embeddings), metadata=flat_meta,global_step=e,
-                             metadata_header=["opponent", "rank", "round", "step", "reward", "action", ])
+        if e - self.save_e >= 2000:
+            self.save_e = e
+            self.writer.add_embedding(mat=np.array(all_embeddings), metadata=flat_meta,global_step=e,
+                                 metadata_header=["opponent", "rank", "round", "step", "reward", "action", ])
 
     def latent_distance(self):
         distance_matrix = np.empty((len(self.latents), len(self.latents),))
         distance_matrix[:] = np.nan
         seq = [(self.latents[i], self.latents[j]) for i in range(len(self.latents)) for j in range(i)]
-        with mp.Pool() as p:
+
+        with mp.Pool(4) as p:
             distances = p.starmap(worker, seq)
+
         index = 0
         for i in range(len(self.latents)):
             for j in range(i+1):
@@ -242,4 +249,9 @@ class ReplayBufferOppo:
 
 def worker(latent1, latent2):
     dis, _, _, _ = accelerated_dtw(latent1, latent2, dist="euclidean")
+    return dis
+
+#slower
+def worker_(latent1, latent2):
+    dis, _ = fastdtw(latent1, latent2)
     return dis
