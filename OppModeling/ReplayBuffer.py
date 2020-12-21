@@ -5,6 +5,16 @@ import multiprocessing as mp
 from OppModeling.utils import combined_shape
 from OppModeling.DTW import accelerated_dtw
 from OppModeling.Fast_DTW import fastdtw
+import os
+import torch
+import torch.nn.functional as F
+import numpy as np
+import sklearn.cluster as sc
+from torch.utils.tensorboard import SummaryWriter
+# from sklearn.manifold import TSNE
+# import pandas as pd
+# import matplotlib.pyplot as plt
+
 
 import time 
 
@@ -104,7 +114,7 @@ class ReplayBufferShare:
 
 
 class ReplayBufferOppo:
-    def __init__(self, max_size, obs_dim, cpc=False, forget_percent=0.2, cpc_model=None, writer=None,E=None):
+    def __init__(self, max_size, obs_dim, cpc=False, forget_percent=0.2, cpc_model=None, writer=None,E=None,T=None):
         self.trajectories = list()
         self.latents = list()
         self.traj_len = list()
@@ -118,6 +128,9 @@ class ReplayBufferOppo:
         self.forget_percent = forget_percent
         self.max_size = max_size
         self.save_e = 0
+        self.num6 = 0
+        self.num7 = 0
+        self.T = T
 
     def store(self, trajectory, latents=None, meta=None):
         while self.size + len(trajectory) >= self.max_size:
@@ -127,6 +140,14 @@ class ReplayBufferOppo:
         if self.cpc:
             self.meta.append(meta)
             self.latents.append(latents)
+            if meta[0][0] == 6:
+                self.num6 += 1
+                self.writer.add_scalar('buffer/num6', self.num6, self.T.value())
+            else:
+                self.num7 += 1
+                self.writer.add_scalar('buffer/num7', self.num7, self.T.value())
+            print(self.num6, self.num7)
+            self.writer.add_scalar('buffer/ratio', self.num6 / self.num7, self.T.value())
         self.size += len(trajectory)
 
     def forget(self):
@@ -134,23 +155,49 @@ class ReplayBufferOppo:
             self.trajectories.pop(0)
             self.size -= self.traj_len.pop(0)
         else:
+            labels = self.create_latents(self.T.value())
+            labels = labels.tolist()
+            nmax = 0
+            lmax = 0
+            N=max(labels)+1
+            for i in range(N):
+                ll=labels.count(i)
+                if labels.count(i)>lmax:
+                    nmax=i
+                    lmax=ll
+
+            for i in labels:
+                if i == nmax:
+                    index = i
+                    break
+
+            if self.meta[index][0] == 6:
+                self.num6 -= 1
+            else:
+                self.num7 -= 1
+            print(self.num6, self.num7)
+            self.trajectories.pop(index)
+            self.meta.pop(index)
+            self.latents.pop(index)
+            self.size -= self.traj_len.pop(index)
 
             # self.trajectories.pop(0)
             # self.meta.pop(0)
             # self.latents.pop(0)
             # self.size -= self.traj_len.pop(0)
-            self.create_latents(self.E.value())
-            distance_matrix = self.latent_distance()
-            closest_k = int(len(self.latents) * self.forget_percent)
-            ind =np.argpartition(distance_matrix, closest_k, axis=1)[:,:closest_k]
-            kmean_dis = distance_matrix.take(ind).mean(axis=1)
-            remove_index = np.argpartition(kmean_dis, closest_k, axis=-1)[:closest_k]
-            remove_index = np.sort(remove_index)[::-1]
-            for index in remove_index:
-                del self.trajectories[index]
-                del self.latents[index]
-                del self.meta[index]
-                self.size -= self.traj_len.pop(index)
+
+            # self.create_latents(self.E.value())
+            # distance_matrix = self.latent_distance()
+            # closest_k = int(len(self.latents) * self.forget_percent)
+            # ind =np.argpartition(distance_matrix, closest_k, axis=1)[:,:closest_k]
+            # kmean_dis = distance_matrix.take(ind).mean(axis=1)
+            # remove_index = np.argpartition(kmean_dis, closest_k, axis=-1)[:closest_k]
+            # remove_index = np.sort(remove_index)[::-1]
+            # for index in remove_index:
+            #     del self.trajectories[index]
+            #     del self.latents[index]
+            #     del self.meta[index]
+            #     self.size -= self.traj_len.pop(index)
 
     def create_latents(self, e):
         assert self.cpc_model is not None
@@ -165,33 +212,64 @@ class ReplayBufferOppo:
             all_embeddings += traj_c.squeeze().tolist()
         # if want to directly delete the elements, latents need to be a list
         self.latents = latents
+        labels = self.AgglomerativeClustering()
         flat_meta = list()
         for meta_traj in self.meta:
             for meta in meta_traj:
                 flat_meta.append(meta)
-        if e - self.save_e >= 2000:
+        # self.writer.add_embedding(mat=np.array(all_embeddings), metadata=flat_meta,global_step=e,
+        #              metadata_header=["opponent", "rank", "round", "step", "reward", "action", ])
+        if e - self.save_e >= 1000:
             self.save_e = e
             self.writer.add_embedding(mat=np.array(all_embeddings), metadata=flat_meta,global_step=e,
                                  metadata_header=["opponent", "rank", "round", "step", "reward", "action", ])
+        return labels
 
-    def latent_distance(self):
-        distance_matrix = np.empty((len(self.latents), len(self.latents),))
-        distance_matrix[:] = np.nan
-        seq = [(self.latents[i], self.latents[j]) for i in range(len(self.latents)) for j in range(i)]
 
-        with mp.Pool(4) as p:
-            distances = p.starmap(worker, seq)
-
-        index = 0
+    def AgglomerativeClustering(self):
+        print(len(self.latents))
+        cnt = 0
+        for i in self.latents:
+            cnt += len(i)
+        mean_len = cnt // len(self.latents)
+        interpolate_t = torch.zeros(len(self.latents), 16, mean_len)
         for i in range(len(self.latents)):
-            for j in range(i+1):
-                if np.isnan(distance_matrix[i][j]):
-                    if i == j:
-                        distance_matrix[i][j] = 0
-                    else:
-                        distance_matrix[i][j] = distance_matrix[j][i] = distances[index]
-                        index += 1
-        return distance_matrix
+            t = torch.Tensor(self.latents[i]).t().unsqueeze(0)
+            t = F.interpolate(t, mean_len)
+            interpolate_t[i] = t
+        interpolate = interpolate_t
+
+        t_data = interpolate_t
+        l2_d = [[0 for _ in range(len(t_data))] for _ in range(len(t_data))]
+        for i in range(len(t_data)):
+            for j in range(i):
+                l2_d[i][j] = l2_d[j][i] = F.pairwise_distance(t_data[i].unsqueeze(0), t_data[j].unsqueeze(0), p=2).sum().item()
+
+        l2_d_mean = np.mean(l2_d)
+        
+        labels = sc.AgglomerativeClustering(affinity='precomputed', n_clusters=None,distance_threshold=l2_d_mean,linkage='average').fit_predict(l2_d)
+        return labels
+
+
+
+    # def latent_distance(self):
+    #     distance_matrix = np.empty((len(self.latents), len(self.latents),))
+    #     distance_matrix[:] = np.nan
+    #     seq = [(self.latents[i], self.latents[j]) for i in range(len(self.latents)) for j in range(i)]
+
+    #     with mp.Pool(4) as p:
+    #         distances = p.starmap(worker, seq)
+
+    #     index = 0
+    #     for i in range(len(self.latents)):
+    #         for j in range(i+1):
+    #             if np.isnan(distance_matrix[i][j]):
+    #                 if i == j:
+    #                     distance_matrix[i][j] = 0
+    #                 else:
+    #                     distance_matrix[i][j] = distance_matrix[j][i] = distances[index]
+    #                     index += 1
+    #     return distance_matrix
 
     def sample_trans(self, batch_size, device=None):
         if batch_size == 0:

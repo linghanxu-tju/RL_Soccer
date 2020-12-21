@@ -69,6 +69,7 @@ class CPC(nn.Module):
         # Do not need transpose as the input shape is N*L*C
         # z = z.transpose(1, 2)
         nce = 0  # average over timestep and batch
+        correct = 0
         encode_samples = torch.empty((self.timestep, batch, self.z_dim),device=self.device).float()  # e.g. size 12*8*512
         for i in np.arange(1, self.timestep + 1):
             encode_samples[i - 1] = z[:, (t_samples + i).long(), :].view(batch, self.z_dim)  # z_tk e.g. size 8*512
@@ -85,11 +86,11 @@ class CPC(nn.Module):
             pred[i] = linear(c_t)  # Wk*c_t e.g. size 8*512
         for i in np.arange(0, self.timestep):
             total = torch.mm(encode_samples[i], torch.transpose(pred[i], 0, 1))  # e.g. size 8*8
-            correct = torch.sum(
+            correct += torch.sum(
                 torch.eq(torch.argmax(self.softmax(total, dim=0), dim=0), torch.arange(0, batch).to(self.device)))  # correct is a tensor
             nce += torch.sum(torch.diag(self.lsoftmax(total, dim=0)))  # nce is a tensor
         nce /= -1. * batch * self.timestep
-        accuracy = 1. * correct.item() / batch
+        accuracy = 1. * correct.item() / (batch *self.timestep)
 
         return accuracy, nce, latents # return output to update the latent value of the buffer
 
