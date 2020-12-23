@@ -110,6 +110,8 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     if args.cpc:
         cpc = CPC(timestep=args.timestep, obs_dim=obs_dim, hidden_sizes=[args.hid] * args.l, z_dim=args.z_dim,
                          c_dim=args.c_dim, device=device)
+    else:
+        cpc = None
 
     # Freeze target networks with respect to optimizers (only update via polyak averaging)
     for p in ac_targ.parameters():
@@ -120,8 +122,9 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     # Experience buffer
     T = Counter()  # training step
     E = Counter()  # training episode
+
     replay_buffer = ReplayBufferOppo(obs_dim=obs_dim, max_size=args.replay_size, cpc=args.cpc,
-                                     cpc_model=cpc, writer=writer_cpc,T=T)
+                                    cpc_model=cpc, writer=writer_cpc,T=T)
 
     # Count variables (protip: try to get a feel for how different size networks behave!)
     var_counts = tuple(count_vars(module) for module in [ac.pi, ac.q1, ac.q2])
@@ -290,7 +293,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     trajectory, meta = [], []
     o, ep_ret, ep_len = env.reset(), 0, 0
     discard = False
-    opp = get_opp_policy(args.p)
+    opp = get_opp_policy(args.p1)
 
     # Main loop: collect experience in env and update/log each epoch
     for t in range(total_steps):
@@ -342,7 +345,10 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             replay_buffer.store(trajectory, meta=meta)
             trajectory, meta = [], []
             E.increment()
-            opp = get_opp_policy(args.p)
+            if t <= args.change_step:
+                opp = get_opp_policy(args.p1)
+            else:
+                opp = get_opp_policy(args.p2)
             discard = False
 
 
@@ -379,7 +385,7 @@ if __name__ == '__main__':
     parser.add_argument('--gamma', type=float, default=0.95)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--policy_type', type=int, default=1)
     parser.add_argument('--replay_size', type=int, default=10000)
     parser.add_argument('--batch_size', type=int, default=256)
@@ -387,14 +393,16 @@ if __name__ == '__main__':
     parser.add_argument('--exp_name', type=str, default='sac')
     parser.add_argument('--save_dir', type=str, default='NewPolicy/SAC/')
 
-    parser.add_argument('--p', type=float, default=0.5)
+    parser.add_argument('--p1', type=float, default=0.5)
+    parser.add_argument('--p2', type=float, default=1.0)
     parser.add_argument('--opp1', type=int, default=6)
     parser.add_argument('--opp2', type=int, default=7)
     parser.add_argument('--test_episodes', type=int, default=50)
     parser.add_argument('--save_freq', type=int, default=500)
+    parser.add_argument('--change_step', type=int, default=100000)
 
     # CPC setting
-    parser.add_argument('--cpc', default=True, action="store_true")
+    parser.add_argument('--cpc', default=False, action="store_true")
     parser.add_argument('--cpc_batch', type=int, default=64)
     parser.add_argument('--z_dim', type=int, default=32)
     parser.add_argument('--c_dim', type=int, default=16)
@@ -404,7 +412,7 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
 
-    save_dir = os.path.join(args.save_dir, str(args.opp1) + '_' + str(args.opp2), str(args.p) + '_' + str(args.seed) + '_' + str(args.cpc_batch))
+    save_dir = os.path.join(args.save_dir, str(args.opp1) + '_' + str(args.opp2), str(args.p1) + '_' + str(args.p2) + '_' +str(args.seed) + '_' + str(args.cpc_batch))
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
@@ -419,8 +427,8 @@ if __name__ == '__main__':
     writer_cpc = SummaryWriter(log_dir=tensorboard_cpc_dir)
 
     test_save_dir = os.path.join(args.save_dir, str(args.opp1) + '_' + str(args.opp2), "test_" + str(args.seed))
-    tensorboard_dir_1 = os.path.join(test_save_dir, "test_" + str(args.opp1) + "_" + str(args.p) + '_' + str(args.seed))
-    tensorboard_dir_3 = os.path.join(test_save_dir, "test_" + str(args.opp2) + "_" + str(args.p) + '_' + str(args.seed))
+    tensorboard_dir_1 = os.path.join(test_save_dir, "test_" + str(args.opp1) + "_" + str(args.p1) + '_' + str(args.p2) + '_' + str(args.seed))
+    tensorboard_dir_3 = os.path.join(test_save_dir, "test_" + str(args.opp2) + "_" + str(args.p1) + '_' + str(args.p2) + '_' + str(args.seed))
     if not os.path.exists(tensorboard_dir_1):
         os.makedirs(tensorboard_dir_1)
     if not os.path.exists(tensorboard_dir_3):
