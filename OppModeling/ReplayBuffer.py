@@ -12,12 +12,11 @@ import numpy as np
 import sklearn.cluster as sc
 from torch.utils.tensorboard import SummaryWriter
 import collections
+import time
 # from sklearn.manifold import TSNE
 # import pandas as pd
 # import matplotlib.pyplot as plt
 
-
-import time 
 
 class ReplayBuffer:
     """
@@ -135,62 +134,67 @@ class ReplayBufferOppo:
 
     def store(self, trajectory, latents=None, meta=None):
         while self.size + len(trajectory) >= self.max_size:
-            self.forget()
+            self.forget(len(trajectory))
         self.trajectories.append(trajectory)
         self.traj_len.append(len(trajectory))
-        if self.cpc:
-            self.meta.append(meta)
-            self.latents.append(latents)
-            if meta[0][0] == 6:
-                self.num6 += 1
-            else:
-                self.num7 += 1
-            # print(self.num6, self.num7)
-            self.writer.add_scalar('buffer/num6', self.num6, self.T.value())
-            self.writer.add_scalar('buffer/num7', self.num7, self.T.value())
-            self.writer.add_scalar('buffer/ratio', self.num6 / (self.num6 + self.num7), self.T.value())
+        self.meta.append(meta)
+        if meta[0][0] == 6:
+            self.num6 += 1
+        else:
+            self.num7 += 1
+        # print(self.num6, self.num7)
+        self.writer.add_scalar('buffer/num6', self.num6, self.T.value())
+        self.writer.add_scalar('buffer/num7', self.num7, self.T.value())
+        self.writer.add_scalar('buffer/ratio', self.num6 / (self.num6 + self.num7), self.T.value())
         self.size += len(trajectory)
 
-    def forget(self):
+    def forget(self, trajectory_length):
         if not self.cpc:
             self.trajectories.pop(0)
             self.size -= self.traj_len.pop(0)
-        else:
-            labels = self.create_latents(self.T.value())
-            labels = labels.tolist()
-            nmax = 0
-            lmax = 0
-            N=max(labels)+1
-            for i in range(N):
-                ll=labels.count(i)
-                if labels.count(i)>lmax:
-                    nmax=i
-                    lmax=ll
-
-            index = 0
-            # print(labels)
-            # print(collections.Counter(labels))
-            # print(nmax)
-            for i in range(len(labels)):
-                if labels[i] == nmax:
-                    index = i
-                    # print(index)
-                    break
-
-            if self.meta[index][0][0] == 6:
+            if self.meta[0][0][0] == 6:
                 self.num6 -= 1
             else:
                 self.num7 -= 1
-            # print(self.num6, self.num7)
-            self.trajectories.pop(index)
-            self.meta.pop(index)
-            self.latents.pop(index)
-            self.size -= self.traj_len.pop(index)
+            self.meta.pop(0)
+        else:
+            # labels = self.create_latents(self.T.value())
+            # labels = labels.tolist()
 
-            # self.trajectories.pop(0)
-            # self.meta.pop(0)
-            # self.latents.pop(0)
-            # self.size -= self.traj_len.pop(0)
+            # while self.size + trajectory_length >= self.max_size:
+            #     nmax = 0
+            #     lmax = 0
+            #     N=max(labels)+1
+            #     for i in range(N):
+            #         ll=labels.count(i)
+            #         if labels.count(i)>lmax:
+            #             nmax=i
+            #             lmax=ll
+
+            #     index = 0
+            #     # print(labels)
+            #     # print(collections.Counter(labels))
+            #     # print(nmax)
+            #     for i in range(len(labels)):
+            #         if labels[i] == nmax:
+            #             index = i
+            #             # print(index)
+            #             break
+
+            #     if self.meta[index][0][0] == 6:
+            #         self.num6 -= 1
+            #     else:
+            #         self.num7 -= 1
+            #     # print(self.num6, self.num7)
+            #     self.trajectories.pop(index)
+            #     self.meta.pop(index)
+            #     self.size -= self.traj_len.pop(index)
+            #     labels.pop(index)
+
+            self.create_latents(self.T.value())
+            self.trajectories.pop(0)
+            self.meta.pop(0)
+            self.size -= self.traj_len.pop(0)
 
             # self.create_latents(self.E.value())
             # distance_matrix = self.latent_distance()
@@ -212,24 +216,28 @@ class ReplayBufferOppo:
         all_embeddings = list()
         for trajectory in self.trajectories:
             obs = [tran[0] for tran in trajectory]
+            
+            obs = np.array(obs)[:, 3:]
+
             c_hidden = self.cpc_model.init_hidden(1, self.cpc_model.c_dim)
             traj_c, c_hidden = self.cpc_model.predict(obs, c_hidden)
             latents.append(traj_c.squeeze())
             all_embeddings += traj_c.squeeze().tolist()
         # if want to directly delete the elements, latents need to be a list
         self.latents = latents
-        labels = self.AgglomerativeClustering()
+        # labels = self.AgglomerativeClustering()
         flat_meta = list()
         for meta_traj in self.meta:
             for meta in meta_traj:
                 flat_meta.append(meta)
         # self.writer.add_embedding(mat=np.array(all_embeddings), metadata=flat_meta,global_step=e,
         #              metadata_header=["opponent", "rank", "round", "step", "reward", "action", ])
-        if e - self.save_e >= 10000:
-            self.save_e = e
-            self.writer.add_embedding(mat=np.array(all_embeddings), metadata=flat_meta,global_step=e,
-                                 metadata_header=["opponent", "rank", "round", "step", "reward", "action", ])
-        return labels
+        
+        # if e - self.save_e >= 2000:
+        #     self.save_e = e
+        #     self.writer.add_embedding(mat=np.array(all_embeddings), metadata=flat_meta,global_step=e,
+        #                          metadata_header=["opponent", "rank", "round", "step", "reward", "action", ])
+        # return labels
 
 
     def AgglomerativeClustering(self):
@@ -240,7 +248,7 @@ class ReplayBufferOppo:
         interpolate_t = torch.zeros(len(self.latents), 16, mean_len).cuda() #NxCxT
         for i in range(len(self.latents)):
             t = self.latents[i].t().unsqueeze(0) # 1xCxT
-            t = F.interpolate(t, mean_len)
+            t = F.interpolate(t, mean_len, mode='linear', align_corners=False)
             interpolate_t[i] = t
         interpolate = interpolate_t
 

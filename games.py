@@ -144,7 +144,8 @@ class Soccer(object):
     def __init__(self,visual=False):
         super(Soccer, self).__init__()
         self.size = int(np.sqrt(len(self.playground)))
-        self.max_steps = len(self.playground) * 2
+        # self.max_steps = len(self.playground) * 2
+        self.max_steps = 100
         self.agent = np.array([self.size // 2, 2])
         self.opponent = np.array([self.size // 2, self.size - 3])
         self.grids = np.array(self.playground).reshape(self.size, self.size)

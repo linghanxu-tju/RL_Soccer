@@ -108,7 +108,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     device = torch.device('cuda')
     if args.cpc:
-        cpc = CPC(timestep=args.timestep, obs_dim=obs_dim, hidden_sizes=[args.hid] * args.l, z_dim=args.z_dim,
+        cpc = CPC(timestep=args.timestep, obs_dim=4, hidden_sizes=[args.hid] * args.l, z_dim=args.z_dim,
                          c_dim=args.c_dim, device=device)
     else:
         cpc = None
@@ -230,6 +230,7 @@ def sac(env_fn, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
     def update_cpc():
         data, indexes, min_len = replay_buffer.sample_traj(args.cpc_batch)
+        data = data[:,:,3:]
         cpc_optimizer.zero_grad()
         c_hidden = cpc.init_hidden(len(data), args.c_dim)
         acc, loss, latents = cpc(data, c_hidden)

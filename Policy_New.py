@@ -14,10 +14,16 @@ class Policy:
             self.offset_action[tuple(v)] = k
         self.my_goal = self.game.getGoalLocation(player_num)
         self.opp_goal = self.game.getGoalLocation(not player_num)
-        self.my_goal_up = self.my_goal[:3]
-        self.my_goal_down = self.my_goal[-3:]
+        self.my_goal_up = self.my_goal[1:6:2]
+        self.my_goal_down = self.my_goal[-5::2]
+
+        #+  加入对手目标，现在场上有5个目标了，4个门的位置和对手位置
+        self.opp_goal_up=self.opp_goal[0:5:2]
+        self.opp_goal_down = self.opp_goal[-6::2]
+        #+
+        
         self.update_status()
-        self.policy_type = [self.policy0, self.policy1, self.policy2, self.policy3, self.policy4, self.policy5]
+        self.policy_type = [self.policy0, self.policy1, self.policy2, self.policy3, self.policy4, self.policy5,self.policy6,self.policy7,self.policy8]
 
     def moving(self, closer: bool, player_number: bool, locations: np.ndarray, actions: np.ndarray, weight=(1, 1, 1)):
         assert locations.ndim == 2 and actions.ndim == 2
@@ -207,6 +213,61 @@ class Policy:
                 action = self.grab_ball(valid_actions)
                 if action is not None:
                     return action
+        action = self.score_to_index(valid_actions, actions_score)
+        return action
+
+    def policy6(self, valid_actions):
+        if self.has_ball:
+            offset = self.win_the_game(valid_actions)
+            if offset is not None:
+                return self.offset_action[tuple(offset)]
+            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_up, actions=valid_actions)
+        else:
+            actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
+            if self.game.getPlayerDistance() <= 2:
+                action = self.grab_ball(valid_actions)
+                if action is not None:
+                    return action
+        action = self.score_to_index(valid_actions, actions_score)
+        return action
+
+    def policy7(self, valid_actions):
+        if self.has_ball:
+            offset = self.win_the_game(valid_actions)
+            if offset is not None:
+                return self.offset_action[tuple(offset)]
+            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_down, actions=valid_actions)
+        else:
+#            print("opp",self.opp)
+            if (self.opp[0]<=8):
+                actions_score = self.moving(closer=True, player_number=True, locations=self.opp_goal_up, actions=valid_actions)
+            else:
+                actions_score = self.moving(closer=True, player_number=True, locations=self.opp_goal_down, actions=valid_actions)
+            if self.game.getPlayerDistance() <= 2:
+                action = self.grab_ball(valid_actions)
+                if action is not None:
+                    return action
+        action = self.score_to_index(valid_actions, actions_score)
+        return action
+
+    def policy8(self, valid_actions):
+        if self.has_ball:
+            offset = self.win_the_game(valid_actions)
+            if offset is not None:
+                return self.offset_action[tuple(offset)]
+            actions_score = self.moving(closer=True, player_number=True, locations=self.my_goal_down, actions=valid_actions)
+        else:
+            if (self.opp[1]<=13):
+                if (self.opp[0]<=8):
+                    actions_score = self.moving(closer=True, player_number=True, locations=self.opp_goal_up, actions=valid_actions)
+                else:
+                    actions_score = self.moving(closer=True, player_number=True, locations=self.opp_goal_down, actions=valid_actions)
+            else:
+                actions_score = self.moving(closer=True, player_number=True, locations=np.expand_dims(self.opp, axis=0), actions=valid_actions)
+                if self.game.getPlayerDistance() <= 2:
+                    action = self.grab_ball(valid_actions)
+                    if action is not None:
+                        return action
         action = self.score_to_index(valid_actions, actions_score)
         return action
 
